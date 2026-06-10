@@ -188,6 +188,18 @@ pipeline.
 
 ---
 
+## Provenance and AI assistance
+
+This public repository is a **de-identified and generalized rewrite** of the
+laboratory's internal, study-specific analysis pipeline. The original code
+contained participant-level file paths, identifier mapping tables, and database
+couplings that cannot be shared publicly. The extraction, de-identification, and
+generalization of the reusable components into this release were performed with
+the assistance of **Claude (Claude Opus 4.8, Anthropic)**. All released code was
+reviewed and approved by the authors, who are responsible for its correctness.
+
+---
+
 ## Citation
 
 The released code supports reproducibility of the EEG conversion, preprocessing,
