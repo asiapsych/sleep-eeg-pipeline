@@ -195,8 +195,9 @@ laboratory's internal, study-specific analysis pipeline. The original code
 contained participant-level file paths, identifier mapping tables, and database
 couplings that cannot be shared publicly. The extraction, de-identification, and
 generalization of the reusable components into this release were performed with
-the assistance of **Claude (Claude Opus 4.8, Anthropic)**. All released code was
-reviewed and approved by the authors, who are responsible for its correctness.
+the assistance of **Claude (Claude Opus 4.8, Anthropic)**. The released code was
+reviewed by the authors and is provided "as is", without warranty of any kind,
+under the BSD 3-Clause License (see `LICENSE`).
 
 ---
 
@@ -210,7 +211,7 @@ manuscript and this repository when reusing or adapting the code.
 
 > The de-identified and generalized analysis code used for EEG conversion,
 > preprocessing, PSD extraction, and feature generation is available at
-> https://github.com/YuCHii26/sleep-eeg-pipeline. Raw EEG recordings,
+> https://github.com/asiapsych/sleep-eeg-pipeline. Raw EEG recordings,
 > participant-level clinical data, database files, and identifier mappings are
 > not publicly available because the ethics approval and participant consent for
 > this study did not include public sharing of participant-level data and

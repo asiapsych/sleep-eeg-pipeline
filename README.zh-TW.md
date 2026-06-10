@@ -151,7 +151,7 @@ Pipeline 在設計上即注重隱私：階段 1 轉檔時，輸出 EDF 的受試
 
 ## 程式碼來源與 AI 協助
 
-本公開倉庫是研究室內部、特定研究專屬分析 pipeline 的**去識別化與通用化改寫版**。原始程式碼包含受試者層級的檔案路徑、ID 對照表與資料庫耦合，無法公開分享。將可重用元件抽取、去識別化並通用化為本 release 的工作，由 **Claude（Claude Opus 4.8, Anthropic）** 協助完成；所有釋出之程式碼均經作者審閱與確認，並由作者負責其正確性。
+本公開倉庫是研究室內部、特定研究專屬分析 pipeline 的**去識別化與通用化改寫版**。原始程式碼包含受試者層級的檔案路徑、ID 對照表與資料庫耦合，無法公開分享。將可重用元件抽取、去識別化並通用化為本 release 的工作，由 **Claude（Claude Opus 4.8, Anthropic）** 協助完成。釋出之程式碼經作者審閱，並依 BSD 3-Clause License 以「現狀（as is）」提供，不附任何明示或默示之擔保（見 `LICENSE`）。
 
 ---
 
@@ -161,7 +161,7 @@ Pipeline 在設計上即注重隱私：階段 1 轉檔時，輸出 EDF 的受試
 
 **論文建議的 Data/Code Availability 聲明：**
 
-> The de-identified and generalized analysis code used for EEG conversion, preprocessing, PSD extraction, and feature generation is available at https://github.com/YuCHii26/sleep-eeg-pipeline. Raw EEG recordings, participant-level clinical data, database files, and identifier mappings are not publicly available because the ethics approval and participant consent for this study did not include public sharing of participant-level data and because the data are subject to institutional privacy restrictions.
+> The de-identified and generalized analysis code used for EEG conversion, preprocessing, PSD extraction, and feature generation is available at https://github.com/asiapsych/sleep-eeg-pipeline. Raw EEG recordings, participant-level clinical data, database files, and identifier mappings are not publicly available because the ethics approval and participant consent for this study did not include public sharing of participant-level data and because the data are subject to institutional privacy restrictions.
 
 ---
 

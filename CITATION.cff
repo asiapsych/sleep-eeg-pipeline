@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the associated manuscript and this repository."
+title: "Resting-State EEG Processing Pipeline (NeuroGuide to Features)"
+abstract: >-
+  De-identified and generalized research code for reproducing the EEG
+  conversion, preprocessing, PSD extraction, and periodic/aperiodic (FOOOF)
+  feature-generation workflow. No participant data are included.
+type: software
+authors:
+  - name: "Sleep and Affective Science Lab, Division of Clinical Psychology, Department of Psychology, Asia University"
+    website: "https://chang-lab-psychology-website-one.vercel.app/"
+license: BSD-3-Clause
+repository-code: "https://github.com/asiapsych/sleep-eeg-pipeline"
+url: "https://chang-lab-psychology-website-one.vercel.app/"
+keywords:
+  - EEG
+  - EEGLAB
+  - FOOOF
+  - spectral parameterization
+  - aperiodic
+  - preprocessing
+  - NeuroGuide
+date-released: "2026-06-10"
