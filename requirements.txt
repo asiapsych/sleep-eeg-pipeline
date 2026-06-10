@@ -1,0 +1,8 @@
+# Python dependencies for stages 01_ng2edf and 03_features.
+# Stage 01 needs only numpy; stage 03 needs all of the below.
+# Pinned to a known-good, mutually compatible set (FOOOF 1.x requires numpy < 2).
+
+numpy==1.26.4
+scipy==1.11.4
+pandas==2.1.4
+fooof==1.1.0

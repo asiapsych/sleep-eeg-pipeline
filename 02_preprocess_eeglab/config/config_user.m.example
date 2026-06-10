@@ -1,0 +1,19 @@
+function paths = config_user()
+% CONFIG_USER  Per-project path overrides.
+%
+% Copy this file to `config_user.m` and edit. `config_user.m` is gitignored,
+% so your local absolute paths are never committed. If it does not exist, the
+% defaults in config_paths.m (relative ../raw_edf, auto-detected EEGLAB) apply.
+
+paths = struct();
+
+% Folder containing your EDF files. Default: <pipeline>/raw_edf
+% paths.RAW_EDF_DIR = '/absolute/path/to/your/edf_folder';
+% paths.RAW_FILE_PATTERN = '*.edf';
+
+% Set EEGLAB explicitly only if it is not already on the MATLAB path.
+% paths.EEGLAB_DIR = '/path/to/eeglab';
+
+% Optional human-readable label.
+% paths.DATASET_LABEL = 'my_collection';
+end

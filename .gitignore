@@ -1,0 +1,65 @@
+# ──────────────────────────────────────────────────────────────
+# Subject data — NEVER commit. Raw or derived, all formats.
+# ──────────────────────────────────────────────────────────────
+*.ng
+*.edf
+*.set
+*.fdt
+*.mat
+*.npy
+*.npz
+*.parquet
+*.db
+*.sqlite
+*.sqlite3
+# Subject-level tables may contain identifiable / clinical data
+*.csv
+*.xlsx
+*.xls
+
+# ──────────────────────────────────────────────────────────────
+# Pipeline working / output directories
+# ──────────────────────────────────────────────────────────────
+**/outputs/
+**/data/
+**/raw_ng/
+**/raw_edf/
+**/Lab_data/
+**/subjects/
+**/psd_mat/
+**/band_power/
+**/features/
+**/qc_pdf/
+**/qc_png/
+**/logs/
+**/decisions/
+**/manifests/
+**/methods/
+
+# ──────────────────────────────────────────────────────────────
+# MATLAB per-project override (may hold local absolute paths)
+# ──────────────────────────────────────────────────────────────
+02_preprocess_eeglab/config/config_user.m
+*.asv
+
+# ──────────────────────────────────────────────────────────────
+# Python
+# ──────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# ──────────────────────────────────────────────────────────────
+# Editor / OS
+# ──────────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+
+# ──────────────────────────────────────────────────────────────
+# Explicitly KEEP these (override the broad ignores above)
+# ──────────────────────────────────────────────────────────────
+!02_preprocess_eeglab/chan_locs/*.ced
+!requirements.txt
