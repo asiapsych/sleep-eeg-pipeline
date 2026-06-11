@@ -157,11 +157,11 @@ Pipeline 在設計上即注重隱私：階段 1 轉檔時，輸出 EDF 的受試
 
 ## 引用（Citation）
 
-本程式碼用於支援 EEG 轉檔、前處理、PSD 抽取與特徵生成流程的可重現性。重用或改作時，請引用對應論文與本 repo。
+發布的程式碼支援腦電圖轉換、預處理、功率譜密度提取和特徵生成工作流程的可複現性。重複使用或修改程式碼時，請引用相關論文和此程式碼庫。
 
-**論文建議的 Data/Code Availability 聲明：**
+**建議的資料/程式碼可用性聲明（針對稿件）：**
 
-> The de-identified and generalized analysis code used for EEG conversion, preprocessing, PSD extraction, and feature generation is available at https://github.com/asiapsych/sleep-eeg-pipeline. Raw EEG recordings, participant-level clinical data, database files, and identifier mappings are not publicly available because the ethics approval and participant consent for this study did not include public sharing of participant-level data and because the data are subject to institutional privacy restrictions.
+> 用於腦電圖轉換、預處理、功率譜密度提取和特徵生成的去識別化和通用化分析程式碼可在 https://github.com/asiapsych/sleep-eeg-pipeline 取得。原始腦電圖記錄、參與者層面的臨床數據、資料庫文件和識別碼映射均不公開，因為本研究的倫理審批和參與者知情同意書並未包含參與者層面數據的公開共享，且這些數據受機構隱私限制。
 
 ---
 
