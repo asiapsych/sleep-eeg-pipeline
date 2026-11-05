@@ -20,6 +20,8 @@ DEFAULT_CODES = EEG_CODES + [CODE_LE, CODE_AVG]
 # 7 = date of test, 12 = label, 13 = time of test; the rest stay empty.
 DEFAULT_STRINGS = {3: b'34.00', 7: b'01/31/2000', 12: b'999', 13: b'12:34:56'}
 
+SPLICE = 0x00020000                       # the only event word seen
+
 NAN_BITS = 0xFFC00000                     # NaN pattern NeuroGuide writes
 NAN32 = np.array([NAN_BITS], dtype='<u4').view('<f4')[0]
 FIRST_BYTE_FF = np.frombuffer(b'\xff\x00\x80\x3f', dtype='<f4')[0]  # ~1.00003
@@ -49,8 +51,8 @@ def average_block(eeg):
 def build_ng(n=750, fs=300, eeg=None, codes=None, blocks=None, strings=None,
              field_byte=1, legacy_flags=(), len0_slots=(), consts=(2, 4, 8),
              montage=b'LinkEars', ref_code=CODE_LE, t3_count=110,
-             gap=b'\x00' * 21, events=(), tail_patch=None, tail=None,
-             extra=b'', truncate=0, pointer_patch=None):
+             gap=b'\x00' * 21, events=(), sample_bytes=None, tail_patch=None,
+             tail=None, extra=b'', truncate=0, pointer_patch=None):
     """Return the bytes of a synthetic ``.ng`` file.
 
     eeg           19 x n float32 array indexed by electrode code (default:
@@ -61,9 +63,13 @@ def build_ng(n=750, fs=300, eeg=None, codes=None, blocks=None, strings=None,
     field_byte    value of the u8 before string #12, or None to omit it
     legacy_flags  slots preceded by a 0x01 "flag" byte (older reading)
     len0_slots    empty slots written as length 0 instead of length 1 + NUL
-    events        [(record, code)] -> tail byte 6*record + 4 = code
-    tail_patch    {tail offset: byte value}
-    tail          explicit tail bytes (default 5*n zero bytes + events)
+    events        [(sample, word)] -> u32 event word of that sample (tail
+                  bytes n + 4*sample ... n + 4*sample + 3); e.g. (s, SPLICE)
+    sample_bytes  {sample: value} for the per-sample byte array (tail bytes
+                  0 ... n-1)
+    tail_patch    {tail offset: byte value}, applied last
+    tail          explicit tail bytes (default: n per-sample bytes and n
+                  event words, all zero except ``sample_bytes``/``events``)
     extra         bytes appended after the tail
     truncate      number of bytes cut from the end
     pointer_patch {0x11|0x15|0x19|0x1d: value} to corrupt a section offset
@@ -115,8 +121,10 @@ def build_ng(n=750, fs=300, eeg=None, codes=None, blocks=None, strings=None,
 
     if tail is None:
         t = bytearray(5 * n)
-        for record, code in events:
-            t[6 * record + 4] = code
+        for sample, value in (sample_bytes or {}).items():
+            t[sample] = value
+        for sample, word in events:
+            struct.pack_into('<I', t, n + 4 * sample, word)
         for off, val in (tail_patch or {}).items():
             t[off] = val
         tail = bytes(t)

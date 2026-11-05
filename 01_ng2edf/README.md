@@ -33,13 +33,13 @@ python ng2edf.py --input ./data/raw_ng --output ./data/raw_edf --dry-run
 # Only process case IDs with a given prefix
 python ng2edf.py -i ./data/raw_ng -o ./data/raw_edf --accept-prefix S
 
-# Also write <ID>_events.tsv with the event markers of each file
+# Also write <ID>_events.tsv with the events (recording splices) of each file
 python ng2edf.py -i ./data/raw_ng -o ./data/raw_edf --events
 ```
 
 | Option | Effect |
 |---|---|
-| `--events` | Also write `<ID>_events.tsv` next to each EDF (see [Event markers](#event-markers)). |
+| `--events` | Also write `<ID>_events.tsv` next to each EDF (see [Events: recording splices](#events-recording-splices)). |
 | `--lenient` | Convert files that fail the file-size or average-channel check, with a warning, instead of reporting them as errors. |
 
 The exit code is 0 if every file converted and 2 if any file failed. Failed
@@ -97,31 +97,47 @@ Every file is checked against the layout in [NG_FORMAT.md](NG_FORMAT.md) §10.
   - an average channel (code 56) that does not match the mean of the EEG
     channels. This would mean the channel table was misread.
 - **Warning only**: unknown electrode codes, an unknown montage name,
-  unexpected preamble constants, non-zero padding, and unrecognised tail
-  records.
+  unexpected preamble constants, non-zero padding, non-zero per-sample bytes
+  in the tail (with their count), unrecognised event words, and a splice
+  that is not at the end of a 6-sample block.
+- **Warning for every file with a splice**: the splice times, e.g.
+  `recording discontinuity at t=12.343 s; do not let analysis windows span it`.
 
-## Event markers
+## Events: recording splices
 
-NeuroGuide stores event markers in the tail section of the file. `--events`
-writes one row per non-empty tail record to `<ID>_events.tsv`. The file is
-written even when a recording has no events, in which case it has a header
-row only.
+The tail section of a `.ng` file holds one `u32` event word per sample. The
+only non-zero word seen is `0x00020000`. It marks a **splice**: the recording
+is discontinuous between that sample and the next, most likely because
+acquisition was paused and continued. The evidence is in
+[NG_FORMAT.md](NG_FORMAT.md) §8; it was verified on 384 recordings. Splices
+are not user-placed Event Markers. How NeuroGuide stores those is not yet
+known, because none occur in the files examined.
+
+The converter prints one warning for every file that has a splice, with the
+splice times. `--events` also writes one row per non-zero event word to
+`<ID>_events.tsv`. The file is written even when a recording has no events,
+in which case it has a header row only.
 
 | Column | Meaning |
 |---|---|
-| `record` | index of the 6-byte tail record |
-| `tail_offset`, `file_offset` | byte offset of the event code, from the start of the tail section and of the file |
-| `code` | event code byte (only `2` has been seen) |
-| `kind` | `event`, or `unknown` for a record with other non-zero bytes |
-| `time_s_span`, `time_s_legacy`, `time_s_sample` | the event time in seconds under each candidate time base |
-| `raw_hex` | the 6 record bytes |
+| `sample` | 0-based sample index of the event word |
+| `time_s` | `sample / sample rate`, seconds from the first sample |
+| `word_hex` | the event word, e.g. `0x00020000` |
+| `kind` | `splice` for `0x00020000`, `unknown` for any other value |
+| `note` | a short explanation, e.g. `recording discontinuous after this sample` |
 
-**The time base of the tail records is not yet known.** The table therefore
-reports the time under all three candidates. At 300 Hz they are record/250,
-record/200 and record/300 s. Pick one only once it has been confirmed (see
-[NG_FORMAT.md](NG_FORMAT.md) §8). `time_s_legacy` corresponds to the marker
-positions of earlier converter versions, give or take about 20 ms. Event
-markers are not written into the EDF.
+**For analysis.** The EDF is a plain, continuous EDF and does not mark
+splices. Treat every splice as a segment boundary: the discontinuity lies
+between `time_s` and `time_s + 1/fs`.
+
+- Do not let epochs, spectral windows, filters or event detectors span it.
+- Process the two sides separately, and discard at least 1 s on either side
+  of the splice. A brief transient follows a splice.
+- If the splice is a pause, the time after it also lags the wall-clock time
+  by the paused interval, which the file does not store.
+
+Marker positions from earlier readers of the format are about a quarter of
+the recording too late. NG_FORMAT.md §11 gives the conversion.
 
 ## Privacy
 

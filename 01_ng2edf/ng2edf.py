@@ -15,6 +15,14 @@ blocks (electrode codes 0..18, FP1 … Pz) are written to the EDF. Consistency
 checks (average channel, file size) stop the conversion of a file whose
 layout does not match, instead of writing misaligned data.
 
+The tail section after the data holds one byte and one u32 event word per
+sample. The only event word seen marks a *splice*: the recording is
+discontinuous between that sample and the next (most likely an acquisition
+pause). A warning lists the splice times of every file that has any, and
+``--events`` writes them to a table. The EDF stays a plain, continuous EDF
+and does not mark them, so downstream code must keep analysis windows from
+spanning a splice.
+
 Privacy note
 ------------
 The output EDF's *patient identification* field is set to the
@@ -34,7 +42,7 @@ Usage
 
     python ng2edf.py --input ./data/raw_ng --output ./data/raw_edf --dry-run
 
-    # also write <ID>_events.tsv with the event markers of each file
+    # also write <ID>_events.tsv with the events (splices) of each file
     python ng2edf.py --input ./data/raw_ng --output ./data/raw_edf --events
 
 Folder naming
@@ -82,16 +90,19 @@ CODE_LINKED_EARS = 55                # reference pseudo-channel (all zero)
 CODE_AVERAGE = 56                    # average of the EEG channels
 
 GAP_BYTES = 21                       # between float data and tail
-TAIL_BYTES_PER_SAMPLE = 5            # tail section = 5 x n_samples bytes
-TAIL_RECORD_SIZE = 6                 # the tail is a sequence of 6-byte records
-TAIL_EVENT_BYTE = 4                  # event code byte inside a record
 
-# The time base of the tail records is NOT known. Candidate record rates,
-# as (records, samples): 'span' = the records cover the whole recording
-# (5 per 6 samples, 250/s at 300 Hz); 'legacy' = the reading of the earlier
-# converter (2 per 3 samples, 200/s at 300 Hz); 'sample' = one record per
-# sample (300/s at 300 Hz). The events table reports all three.
-EVENT_TIME_BASES = {'span': (5, 6), 'legacy': (2, 3), 'sample': (1, 1)}
+# Tail section = n per-sample bytes, then n per-sample u32 event words
+# (5 x n_samples bytes in all). Word i belongs to sample i.
+TAIL_BYTES_PER_SAMPLE = 5
+EVENT_WORD_SIZE = 4
+
+# The only non-zero event word seen: a splice, i.e. the recording is
+# discontinuous between this sample and the next (most likely an
+# acquisition pause). Every splice seen is on the last sample of a
+# 6-sample acquisition block.
+EVENT_WORD_SPLICE = 0x00020000
+EVENT_WORD_KINDS = {EVENT_WORD_SPLICE: 'splice'}
+ACQ_BLOCK_SAMPLES = 6
 
 # Montage names that become a channel-label suffix ('LinkEars' → '-LE').
 KNOWN_REFERENCES = ('LinkEars', 'LinkedEars', 'Avg', 'Average',
@@ -286,65 +297,80 @@ def parse_header(data):
     }
 
 
-# ── Tail section: event markers ──────────────────────────────────────────
+# ── Tail section: per-sample bytes and event words ───────────────────────
 
-def parse_events(tail, tail_offset=0):
-    """Return the non-empty 6-byte records of a tail section.
+def parse_tail(tail, n_samples, sample_rate, tail_offset=0):
+    """Decode the tail section: ``n`` per-sample bytes, then ``n`` u32 words.
 
-    ``tail`` is the tail section (bytes from the tail offset to the end of
-    the file); ``tail_offset`` is its absolute position, used for
-    ``file_offset``. A record whose only non-zero byte is byte 4 is an event
-    (``kind='event'``, ``code`` = that byte); any other non-zero record is
-    returned with ``kind='unknown'``. No time is attached: see
-    :func:`event_time_s`.
+    ``tail`` holds the bytes from the tail offset on (at most 5 x n are
+    used; a shorter, truncated tail is read as far as it goes).
+    ``tail_offset`` is its position in the file, used for ``file_offset``.
+
+    Returns a dict:
+
+    - ``sample_bytes``: the per-sample byte array (uint8). Meaning unknown;
+      all zero in every file examined.
+    - ``sample_bytes_nonzero``: how many of those bytes are non-zero.
+    - ``words``: the per-sample event words (uint32); word *i* belongs to
+      sample *i*.
+    - ``events``: one dict per non-zero word, in sample order, with
+      ``sample`` (0-based), ``time_s`` (= sample / sample_rate),
+      ``word``, ``word_hex``, ``kind`` (``'splice'`` for 0x00020000,
+      ``'unknown'`` otherwise), ``on_block_end`` (sample is the last of a
+      6-sample acquisition block) and ``file_offset`` (of the word).
+    - ``partial_word_nonzero``: True if a truncated tail ends inside a word
+      that has non-zero bytes.
+
+    A splice means that the recording is discontinuous between ``sample``
+    and ``sample + 1``; see NG_FORMAT.md §8.
     """
-    n_rec = len(tail) // TAIL_RECORD_SIZE
-    recs = np.frombuffer(tail[:n_rec * TAIL_RECORD_SIZE], dtype=np.uint8)
-    recs = recs.reshape(n_rec, TAIL_RECORD_SIZE)
+    n_bytes = min(n_samples, len(tail))
+    sample_bytes = np.frombuffer(tail[:n_bytes], dtype=np.uint8)
+    word_area = tail[n_samples:TAIL_BYTES_PER_SAMPLE * n_samples]
+    n_words = len(word_area) // EVENT_WORD_SIZE
+    words = np.frombuffer(word_area[:n_words * EVENT_WORD_SIZE], dtype='<u4')
     events = []
-    for r in np.flatnonzero(recs.any(axis=1)):
-        rec = recs[r]
-        others = np.delete(rec, TAIL_EVENT_BYTE)
-        offset = int(r) * TAIL_RECORD_SIZE + TAIL_EVENT_BYTE
+    for s in np.flatnonzero(words):
+        s = int(s)
+        word = int(words[s])
         events.append({
-            'record': int(r),
-            'tail_offset': offset,
-            'file_offset': tail_offset + offset,
-            'code': int(rec[TAIL_EVENT_BYTE]),
-            'kind': 'unknown' if others.any() or not rec[TAIL_EVENT_BYTE] else 'event',
-            'raw_hex': rec.tobytes().hex(),
+            'sample': s,
+            'time_s': s / sample_rate,
+            'word': word,
+            'word_hex': f'0x{word:08x}',
+            'kind': EVENT_WORD_KINDS.get(word, 'unknown'),
+            'on_block_end': s % ACQ_BLOCK_SAMPLES == ACQ_BLOCK_SAMPLES - 1,
+            'file_offset': tail_offset + n_samples + EVENT_WORD_SIZE * s,
         })
-    return events
+    return {
+        'sample_bytes': sample_bytes,
+        'sample_bytes_nonzero': int(np.count_nonzero(sample_bytes)),
+        'words': words,
+        'events': events,
+        'partial_word_nonzero': any(word_area[n_words * EVENT_WORD_SIZE:]),
+    }
 
 
-def event_time_s(event, sample_rate, time_base):
-    """Time of ``event`` in seconds under an explicitly chosen time base.
-
-    ``time_base`` is a key of ``EVENT_TIME_BASES`` ('span', 'legacy' or
-    'sample'). The record rate of the tail section is unresolved (see
-    NG_FORMAT.md), so there is deliberately no default.
-    """
-    if time_base not in EVENT_TIME_BASES:
-        raise ValueError(f'time_base must be one of {sorted(EVENT_TIME_BASES)}')
-    records, samples = EVENT_TIME_BASES[time_base]
-    return event['record'] * samples / (records * sample_rate)
+def event_note(event):
+    """Short explanation of an event for the events table."""
+    if event['kind'] == 'splice':
+        note = 'recording discontinuous after this sample'
+        if not event['on_block_end']:
+            note += '; not at the end of a 6-sample block'
+        return note
+    return 'unrecognised event word'
 
 
-EVENT_TSV_COLUMNS = (['record', 'tail_offset', 'file_offset', 'code', 'kind']
-                     + [f'time_s_{base}' for base in EVENT_TIME_BASES]
-                     + ['raw_hex'])
+EVENT_TSV_COLUMNS = ['sample', 'time_s', 'word_hex', 'kind', 'note']
 
 
-def write_events_tsv(filepath, events, sample_rate):
-    """Write the tail records as a tab-separated table (header line first)."""
+def write_events_tsv(filepath, events):
+    """Write the events as a tab-separated table (header line first)."""
     with open(filepath, 'w', encoding='ascii', newline='\n') as f:
         f.write('\t'.join(EVENT_TSV_COLUMNS) + '\n')
         for ev in events:
-            row = [str(ev['record']), str(ev['tail_offset']),
-                   str(ev['file_offset']), str(ev['code']), ev['kind']]
-            row += [f'{event_time_s(ev, sample_rate, base):.6f}'
-                    for base in EVENT_TIME_BASES]
-            row.append(ev['raw_hex'])
+            row = [str(ev['sample']), f"{ev['time_s']:.6f}", ev['word_hex'],
+                   ev['kind'], event_note(ev)]
             f.write('\t'.join(row) + '\n')
 
 
@@ -464,15 +490,33 @@ def parse_ng(filepath, lenient=False):
             warnings.append(f"{labels[c]} has {int(bad.sum())} non-finite samples "
                             f"(set to 0; mark it as a bad channel)")
 
-    # ── tail section: event markers ──────────────────────────────────
-    tail = data[tail_offset:tail_offset + TAIL_BYTES_PER_SAMPLE * n]
-    events = parse_events(tail, tail_offset)
-    n_unknown = sum(ev['kind'] != 'event' for ev in events)
+    # ── tail section: per-sample bytes and event words ───────────────
+    tail = parse_tail(data[tail_offset:], n, hdr['sample_rate'], tail_offset)
+    events = tail['events']
+    if tail['sample_bytes_nonzero']:
+        warnings.append(f"{tail['sample_bytes_nonzero']} non-zero byte(s) in the "
+                        f"per-sample byte array of the tail (all zero in every file "
+                        f"examined; meaning unknown, the EDF is not affected)")
+    n_unknown = sum(ev['kind'] == 'unknown' for ev in events)
     if n_unknown:
-        warnings.append(f'{n_unknown} tail record(s) with unrecognised content '
+        warnings.append(f'{n_unknown} event word(s) with an unrecognised value '
                         f'(listed with --events)')
-    if any(tail[len(tail) - len(tail) % TAIL_RECORD_SIZE:]):
-        warnings.append('non-zero bytes after the last whole tail record')
+    off_block = [ev['sample'] for ev in events
+                 if ev['kind'] == 'splice' and not ev['on_block_end']]
+    if off_block:
+        warnings.append(f'splice word(s) not at the end of a 6-sample block, '
+                        f'at sample(s) {off_block}')
+    if tail['partial_word_nonzero']:
+        warnings.append('non-zero bytes in the incomplete last event word')
+    splices = [ev for ev in events if ev['kind'] == 'splice']
+    if splices:
+        times = ', '.join(f"{ev['time_s']:.3f}" for ev in splices)
+        if len(splices) == 1:
+            warnings.append(f'recording discontinuity at t={times} s; '
+                            f'do not let analysis windows span it')
+        else:
+            warnings.append(f'{len(splices)} recording discontinuities at '
+                            f't={times} s; do not let analysis windows span them')
 
     for msg in warnings:
         print(f"  WARNING: {msg}: {filepath}")
@@ -491,6 +535,7 @@ def parse_ng(filepath, lenient=False):
         'data_offset': data_offset,
         'tail_offset': tail_offset,
         'events': events,
+        'tail_sample_bytes_nonzero': tail['sample_bytes_nonzero'],
         'checks': checks,
         'warnings': warnings,
     }
@@ -620,9 +665,10 @@ def main(argv=None):
     parser.add_argument('--dry-run', action='store_true',
                         help='List planned conversions without writing files')
     parser.add_argument('--events', action='store_true',
-                        help='Also write <ID>_events.tsv with the event markers '
-                             'of each file (record index, byte offsets and the '
-                             'candidate times; see NG_FORMAT.md)')
+                        help='Also write <ID>_events.tsv with the events of '
+                             'each file: sample, time, event word and kind '
+                             '(splice = recording discontinuity; see '
+                             'NG_FORMAT.md)')
     parser.add_argument('--lenient', action='store_true',
                         help='Convert files that fail the file-size or '
                              'average-channel check (with a warning) instead '
@@ -659,8 +705,8 @@ def main(argv=None):
             if args.events:
                 tsv_name = f'{case_id}_events.tsv'
                 write_events_tsv(os.path.join(args.output, tsv_name),
-                                 info['events'], info['sample_rate'])
-                print(f"    -> {tsv_name} ({len(info['events'])} record(s))")
+                                 info['events'])
+                print(f"    -> {tsv_name} ({len(info['events'])} event(s))")
             converted += 1
         except Exception as e:                                    # noqa: BLE001
             print(f"  ERROR {case_id} ({ng_path}): {e}")

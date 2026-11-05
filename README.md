@@ -106,9 +106,14 @@ pip install -r requirements.txt
 ## Quick start
 
 ```bash
-# 1) NeuroGuide → EDF   (add --events for a per-file table of event markers)
+# 1) NeuroGuide → EDF   (add --events for a per-file table of recording splices)
 python 01_ng2edf/ng2edf.py --input /path/to/raw_ng --output /path/to/raw_edf
 ```
+
+Stage 1 prints a warning for every recording that contains a *splice*, a
+discontinuity most likely left by an acquisition pause. The EDF does not mark
+it, so keep epochs and filters from spanning it (see
+[`01_ng2edf/README.md`](01_ng2edf/README.md#events-recording-splices)).
 
 ```matlab
 % 2) MATLAB preprocessing (inside an interactive MATLAB session)

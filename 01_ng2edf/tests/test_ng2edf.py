@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 
 import ng2edf  # noqa: E402
 import ngsynth  # noqa: E402
-from ngsynth import build_ng  # noqa: E402
+from ngsynth import SPLICE, build_ng  # noqa: E402
 
 N = 750                      # 2.5 s at 300 Hz (a multiple of 6, like real files)
 LABELS_LE = [name + '-LE' for name in ng2edf.NG_CHANNEL_NAMES_19]
@@ -298,19 +298,29 @@ class DataTests(TempDirTestCase):
 
 class SizeTests(TempDirTestCase):
     def test_truncated_tail(self):
-        buf = build_ng(n=N, events=[(10, 2)], truncate=7)
+        # 1 byte short: the last event word (00 00 02 00) loses its last byte.
+        buf = build_ng(n=N, events=[(5, SPLICE), (N - 1, SPLICE)], truncate=1)
         with self.assertRaisesRegex(ng2edf.NGFormatError, 'file size'):
             self.parse(buf)
         info, out = self.parse(buf, lenient=True)
         self.assertIn('file size', out)
-        self.assertEqual([e['record'] for e in info['events']], [10])
+        self.assertIn('non-zero bytes in the incomplete last event word', out)
+        self.assertEqual([e['sample'] for e in info['events']], [5])
 
     def test_extra_trailing_bytes(self):
-        buf = build_ng(n=N, extra=b'\x00' * 15)
+        buf = build_ng(n=N, events=[(N - 1, SPLICE)], extra=b'\x00\x00\x02\x00' * 4)
         with self.assertRaisesRegex(ng2edf.NGFormatError, 'expected'):
             self.parse(buf)
         info, _ = self.parse(buf, lenient=True)
         np.testing.assert_array_equal(np.vstack(info['channels']), ngsynth.synthetic_eeg(N))
+        # bytes after off_tail + 5n are not read as event words
+        self.assertEqual([e['sample'] for e in info['events']], [N - 1])
+
+    def test_tail_of_the_old_6_byte_record_length_is_rejected(self):
+        # a tail that is a whole number of 6-byte records but not 5 x n
+        buf = build_ng(n=N, tail=bytes(6 * (5 * N // 6 + 1)))
+        with self.assertRaisesRegex(ng2edf.NGFormatError, r'tail offset \+ 5 x n_samples'):
+            self.parse(buf)
 
     def test_truncated_data_is_always_an_error(self):
         buf = build_ng(n=N, truncate=5 * N + 21 + 100)
@@ -343,62 +353,106 @@ class SizeTests(TempDirTestCase):
 # ── tail section / events ────────────────────────────────────────────────
 
 class EventTests(TempDirTestCase):
-    def test_events_at_known_tail_offsets(self):
-        last = 5 * N // 6 - 1
-        buf = build_ng(n=N, events=[(0, 2), (123, 2), (last, 7)])
+    def test_splices_at_known_samples(self):
+        # samples 5, 125 and N-1 are each the last sample of a 6-sample block
+        buf = build_ng(n=N, events=[(5, SPLICE), (125, SPLICE), (N - 1, SPLICE)])
         info, out = self.parse(buf)
-        self.assertEqual(out, '')
         tail_offset = ngsynth.offsets(buf)[3]
-        got = [(e['record'], e['tail_offset'], e['file_offset'], e['code'], e['kind'])
+        got = [(e['sample'], e['word'], e['word_hex'], e['kind'], e['on_block_end'])
                for e in info['events']]
-        self.assertEqual(got, [
-            (0, 4, tail_offset + 4, 2, 'event'),
-            (123, 742, tail_offset + 742, 2, 'event'),
-            (last, 6 * last + 4, tail_offset + 6 * last + 4, 7, 'event'),
-        ])
+        self.assertEqual(got, [(5, SPLICE, '0x00020000', 'splice', True),
+                               (125, SPLICE, '0x00020000', 'splice', True),
+                               (N - 1, SPLICE, '0x00020000', 'splice', True)])
+        self.assertEqual([e['time_s'] for e in info['events']],
+                         [5 / 300, 125 / 300, (N - 1) / 300])
         for e in info['events']:
-            self.assertEqual(buf[e['file_offset']], e['code'])
-            self.assertNotIn('time', ' '.join(e))
+            # the word of sample s is at tail offset n + 4s: bytes 00 00 02 00
+            self.assertEqual(e['file_offset'], tail_offset + N + 4 * e['sample'])
+            self.assertEqual(buf[e['file_offset']:e['file_offset'] + 4], b'\x00\x00\x02\x00')
+        self.assertEqual(info['tail_sample_bytes_nonzero'], 0)
+        # one warning for the file, with every splice time
+        self.assertEqual(out.count('WARNING'), 1)
+        self.assertIn('3 recording discontinuities at t=0.017, 0.417, 2.497 s; '
+                      'do not let analysis windows span them', out)
 
-    def test_event_time_needs_an_explicit_base(self):
-        ev = ng2edf.parse_events(build_ng(n=N, events=[(500, 2)])[-5 * N:])[0]
-        # 300 Hz: 250, 200 and 300 records per second
-        self.assertEqual(ng2edf.event_time_s(ev, 300, 'span'), 2.0)
-        self.assertEqual(ng2edf.event_time_s(ev, 300, 'legacy'), 2.5)
-        self.assertAlmostEqual(ng2edf.event_time_s(ev, 300, 'sample'), 500 / 300)
-        # the candidates scale with the sample rate
-        self.assertEqual(ng2edf.event_time_s(ev, 250, 'sample'), 2.0)
-        with self.assertRaises(TypeError):
-            ng2edf.event_time_s(ev, 300)     # pylint: disable=no-value-for-parameter
-        with self.assertRaises(ValueError):
-            ng2edf.event_time_s(ev, 300, 250)
+    def test_single_splice_warning(self):
+        info, out = self.parse(build_ng(n=N, events=[(359, SPLICE)]))
+        self.assertEqual([e['sample'] for e in info['events']], [359])
+        self.assertIn('WARNING: recording discontinuity at t=1.197 s; '
+                      'do not let analysis windows span it', out)
 
-    def test_unrecognised_tail_record(self):
-        info, out = self.parse(build_ng(n=N, tail_patch={61: 9}))
-        self.assertEqual(info['events'][0]['kind'], 'unknown')
-        self.assertEqual(info['events'][0]['record'], 10)
-        self.assertEqual(info['events'][0]['raw_hex'], '000900000000')
-        self.assertIn('1 tail record(s) with unrecognised content', out)
+    def test_events_follow_the_sample_rate(self):
+        n = 600
+        eeg = ngsynth.synthetic_eeg(n)
+        info, _ = self.parse(build_ng(n=n, fs=250, eeg=eeg, events=[(503, SPLICE)]))
+        self.assertEqual(info['events'][0]['time_s'], 503 / 250)
 
-    def test_no_events(self):
-        info, _ = self.parse(build_ng(n=N))
+    def test_unknown_event_words(self):
+        buf = build_ng(n=N, events=[(11, 0x00000007), (35, 0x00010000), (41, SPLICE)])
+        info, out = self.parse(buf)
+        self.assertEqual([(e['sample'], e['word_hex'], e['kind']) for e in info['events']],
+                         [(11, '0x00000007', 'unknown'), (35, '0x00010000', 'unknown'),
+                          (41, '0x00020000', 'splice')])
+        self.assertIn('2 event word(s) with an unrecognised value', out)
+        # only the splice is reported as a discontinuity
+        self.assertIn('recording discontinuity at t=0.137 s', out)
+
+    def test_splice_off_the_block_grid_warns(self):
+        info, out = self.parse(build_ng(n=N, events=[(12, SPLICE)]))
+        self.assertEqual(info['events'][0]['kind'], 'splice')
+        self.assertFalse(info['events'][0]['on_block_end'])
+        self.assertIn('not at the end of a 6-sample block, at sample(s) [12]', out)
+
+    def test_nonzero_per_sample_bytes_warn_and_are_counted(self):
+        buf = build_ng(n=N, sample_bytes={0: 1, 10: 2, N - 1: 0xFF})
+        info, out = self.parse(buf)
+        self.assertEqual(info['tail_sample_bytes_nonzero'], 3)
+        self.assertIn('WARNING: 3 non-zero byte(s) in the per-sample byte array', out)
         self.assertEqual(info['events'], [])
 
+    def test_old_record_offsets_are_not_events(self):
+        # The earlier reading took tail byte 6r + 4 for an event code. In the
+        # first n bytes that is the per-sample byte array, not an event word.
+        buf = build_ng(n=N, tail_patch={6 * 10 + 4: 2})
+        info, out = self.parse(buf)
+        self.assertEqual(info['events'], [])
+        self.assertEqual(info['tail_sample_bytes_nonzero'], 1)
+        self.assertIn('per-sample byte array', out)
+
+    def test_parse_tail_directly(self):
+        buf = build_ng(n=N, events=[(17, SPLICE)], sample_bytes={3: 1})
+        tail_offset = ngsynth.offsets(buf)[3]
+        tail = ng2edf.parse_tail(buf[tail_offset:], N, 300, tail_offset)
+        self.assertEqual(len(tail['sample_bytes']), N)
+        self.assertEqual(len(tail['words']), N)
+        self.assertEqual(tail['sample_bytes_nonzero'], 1)
+        self.assertEqual(np.flatnonzero(tail['words']).tolist(), [17])
+        self.assertEqual(tail['events'][0]['file_offset'], tail_offset + N + 4 * 17)
+        self.assertFalse(tail['partial_word_nonzero'])
+
+    def test_no_events(self):
+        info, out = self.parse(build_ng(n=N))
+        self.assertEqual(info['events'], [])
+        self.assertEqual(out, '')
+
     def test_events_tsv(self):
-        self.write_ng(build_ng(n=N, events=[(300, 2), (601, 2)]))
+        self.write_ng(build_ng(n=N, events=[(299, SPLICE), (12, SPLICE), (601, 7)]))
         rc, out = self.run_cli('--events')
         self.assertEqual(rc, 0)
-        self.assertIn('-> S001_events.tsv (2 record(s))', out)
+        self.assertIn('-> S001_events.tsv (3 event(s))', out)
         with open(self.out_path('S001_events.tsv'), newline='') as f:
             rows = list(csv.DictReader(f, delimiter='\t'))
         self.assertEqual(list(rows[0]), ng2edf.EVENT_TSV_COLUMNS)
-        self.assertEqual([r['record'] for r in rows], ['300', '601'])
-        self.assertEqual(rows[0]['tail_offset'], str(6 * 300 + 4))
-        self.assertEqual(rows[0]['time_s_span'], '1.200000')
-        self.assertEqual(rows[0]['time_s_legacy'], '1.500000')
-        self.assertEqual(rows[0]['time_s_sample'], '1.000000')
-        self.assertEqual(rows[1]['time_s_sample'], '2.003333')
-        self.assertEqual(rows[0]['kind'], 'event')
+        self.assertEqual(ng2edf.EVENT_TSV_COLUMNS,
+                         ['sample', 'time_s', 'word_hex', 'kind', 'note'])
+        self.assertEqual([(r['sample'], r['time_s'], r['word_hex'], r['kind']) for r in rows],
+                         [('12', '0.040000', '0x00020000', 'splice'),
+                          ('299', '0.996667', '0x00020000', 'splice'),
+                          ('601', '2.003333', '0x00000007', 'unknown')])
+        self.assertEqual(rows[0]['note'], 'recording discontinuous after this sample; '
+                                          'not at the end of a 6-sample block')
+        self.assertEqual(rows[1]['note'], 'recording discontinuous after this sample')
+        self.assertEqual(rows[2]['note'], 'unrecognised event word')
 
     def test_events_tsv_header_only_when_empty(self):
         self.write_ng(build_ng(n=N))
@@ -406,12 +460,17 @@ class EventTests(TempDirTestCase):
         with open(self.out_path('S001_events.tsv')) as f:
             self.assertEqual(f.read(), '\t'.join(ng2edf.EVENT_TSV_COLUMNS) + '\n')
 
-    def test_no_tsv_without_flag(self):
-        self.write_ng(build_ng(n=N, events=[(300, 2)]))
+    def test_no_tsv_without_flag_but_still_a_warning(self):
+        self.write_ng(build_ng(n=N, events=[(299, SPLICE)]))
         rc, out = self.run_cli()
         self.assertEqual(rc, 0)
         self.assertEqual(os.listdir(os.path.join(self.tmp, 'out')), ['S001.edf'])
-        self.assertNotIn('events', out)
+        self.assertIn('recording discontinuity at t=0.997 s', out)
+        self.assertNotIn('_events.tsv', out)
+
+    def test_old_time_base_api_is_gone(self):
+        for name in ('EVENT_TIME_BASES', 'event_time_s', 'parse_events'):
+            self.assertFalse(hasattr(ng2edf, name), name)
 
 
 # ── EDF output and CLI ───────────────────────────────────────────────────
@@ -441,6 +500,16 @@ class EdfTests(TempDirTestCase):
                     self.assertEqual(hashlib.sha256(f.read()).hexdigest(),
                                      GOLDEN_EDF_SHA256[name])
 
+    def test_tail_content_does_not_change_the_edf(self):
+        # splices, unknown words and per-sample bytes: still plain EDF, same bytes
+        buf = build_ng(n=N, events=[(5, SPLICE), (299, SPLICE), (40, 7)],
+                       sample_bytes={1: 1})
+        path, out = self.convert(buf, '--events')
+        self.assertIn('recording discontinuities', out)
+        with open(path, 'rb') as f:
+            self.assertEqual(hashlib.sha256(f.read()).hexdigest(),
+                             GOLDEN_EDF_SHA256['default'])
+
     def test_edf_header_and_data(self):
         path, out = self.convert(build_ng(n=N))
         self.assertIn('S001: 19ch | 300Hz | 750 samples (2s) | ref=LinkEars', out)
@@ -459,7 +528,7 @@ class EdfTests(TempDirTestCase):
     def test_header_text_never_reaches_outputs(self):
         secret = b'SYNTHETIC-PERSON-NAME'
         strings = {**ngsynth.DEFAULT_STRINGS, 1: secret, 11: b'synthetic comment'}
-        path, out = self.convert(build_ng(n=N, strings=strings, events=[(5, 2)]),
+        path, out = self.convert(build_ng(n=N, strings=strings, events=[(5, SPLICE)]),
                                  '--events')
         with open(path, 'rb') as f:
             edf = f.read()

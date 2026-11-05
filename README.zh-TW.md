@@ -95,7 +95,7 @@ pip install -r requirements.txt
 ## 快速開始
 
 ```bash
-# 1) NeuroGuide → EDF   （加 --events 可另存每個檔案的事件標記表）
+# 1) NeuroGuide → EDF   （加 --events 可另存每個檔案的錄製接縫表）
 python 01_ng2edf/ng2edf.py --input /path/to/raw_ng --output /path/to/raw_edf
 ```
 
@@ -103,7 +103,9 @@ python 01_ng2edf/ng2edf.py --input /path/to/raw_ng --output /path/to/raw_edf
 
 - 轉檔程式依檔頭中記錄的區段位置（section offsets）與通道代碼表，以結構化方式解析 `.ng`，只輸出代碼 0–18 的 19 個 EEG 通道。
 - 平均通道或檔案大小對不上時，該檔會報錯並略過，不會寫出錯位的資料。確定要轉時可加 `--lenient`。
-- `--events` 輸出的事件時間，目前並列三種候選時間基準，因為格式中的時間基準尚未確定。
+- 檔尾每個取樣點各有一個事件字組。目前只見過 `0x00020000`，代表錄製中斷後接續的「接縫」（splice）：該點與下一點之間的訊號不連續，最可能是擷取時按了暫停再繼續。轉檔時，有接縫的檔案會各印一行警告，列出接縫時間；`--events` 另寫出 `<ID>_events.tsv`（欄位 sample、time_s、word_hex、kind、note）。
+- EDF 仍是一般連續的 EDF，不標記接縫。分析時請把接縫當成段落邊界：epoch、頻譜視窗、濾波與偵測器都不可跨越接縫，接縫前後各捨棄至少 1 秒。
+- 使用者手動放置的 Event Marker 存在哪裡、每個取樣點那一個位元組的意義，目前仍不清楚。
 - 格式細節與尚未解開的問題見 [`01_ng2edf/NG_FORMAT.md`](01_ng2edf/NG_FORMAT.md)（英文）。
 - 測試：`python -m unittest discover -s 01_ng2edf/tests -v`。
 

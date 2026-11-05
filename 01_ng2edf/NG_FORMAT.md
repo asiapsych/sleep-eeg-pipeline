@@ -6,8 +6,11 @@ specification, so everything here comes from reverse engineering.
 
 **Evidence base.** The layout below was checked byte-for-byte on 30
 NeuroGuide-produced recordings from a single acquisition setup (DSI-24 amplifier,
-19 channels of the 10-20 system, 300 Hz, linked-ears montage). Statements
-marked *invariant* held in every one of those files. They may not hold for other
+19 channels of the 10-20 system, 300 Hz, linked-ears montage). The header
+constants and the tail section (§8) were also checked on the structural
+metadata of 384 recordings from the same setup, and the meaning of the event
+word was checked against the EEG of those 384 recordings. Statements marked
+*invariant* held in every one of those files. They may not hold for other
 amplifiers, montages, sample rates or NeuroGuide versions. The converter
 checks the ones it depends on.
 
@@ -19,7 +22,7 @@ Contents: [1 Conventions](#1-conventions) ·
 [4 Section A](#4-section-a-subject-information) ·
 [5 Section B](#5-section-b-signal-and-montage-description) ·
 [6 Data](#6-data-section) · [7 Gap](#7-gap-21-bytes) ·
-[8 Tail and events](#8-tail-section-and-event-markers) ·
+[8 Tail and events](#8-tail-section-per-sample-bytes-and-event-words) ·
 [9 Invariants](#9-invariants) · [10 What ng2edf checks](#10-what-ng2edf-checks) ·
 [11 Earlier readings](#11-earlier-readings-of-the-format) ·
 [12 Open questions](#12-open-questions) · [13 Privacy](#13-privacy) ·
@@ -42,8 +45,8 @@ Contents: [1 Conventions](#1-conventions) ·
 ## 2. File layout
 
 ```
-0          33              off_B             off_data                       off_tail          EOF
-| preamble | A: subject info | B: signal/montage | f32 data [n_ch][n] | 21 B | tail: 5·n bytes |
+0          33              off_B             off_data                       off_tail                     EOF
+| preamble | A: subject info | B: signal/montage | f32 data [n_ch][n] | 21 B | u8 [n] | u32 words [n] |
 ```
 
 `n` is the number of samples per channel and `n_ch` the number of data blocks
@@ -170,40 +173,68 @@ block 0, then block 1, …), in the order of the electrode-code table.
 examined. 21 equals n_ch, so this might be one byte per channel (for example a
 bad-channel flag), but that is a guess.
 
-## 8. Tail section and event markers
+## 8. Tail section: per-sample bytes and event words
 
-From `off_tail` to EOF: **5·n bytes**.
+From `off_tail` to EOF: **5·n bytes**, one byte and one `u32` word per sample.
 
-- **Record structure**: the tail reads as **6-byte records**, 5n/6 of them (n
-  has always been a multiple of 6). Record *r* covers tail bytes
-  `[6r, 6r + 6)`.
-- **Events**: every event marker seen is a record whose **byte 4** is non-zero
-  and whose other five bytes are zero. In tail coordinates, an event is at
-  offset `6r + 4`. The only code value seen is **2**. Its meaning (presumably an
-  index into NeuroGuide's Event Marker list) is unknown.
-- All other tail bytes were zero in every file examined.
-
-**Time base: unresolved.** Nothing in the file says how a record index maps to
-time. Three candidates are consistent with the data, given here as
-records per sample and, in brackets, as records per second at 300 Hz:
-
-| Name in `ng2edf.py` | Records per sample | Rate at 300 Hz | Time of record *r* | Rationale |
+| Tail offset | Type | Content seen | Meaning | Conf. |
 |---|---|---|---|---|
-| `span` | 5/6 | 250/s | 6r / (5·fs) | the records evenly cover the whole recording |
-| `legacy` | 2/3 | 200/s | 3r / (2·fs) | matches the earlier converter, which read the region as one u32 per sample |
-| `sample` | 1 | 300/s | r / fs | one record per sample, with the array truncated to the tail length |
+| 0 … n−1 | u8 × n | all zero | one byte per sample; meaning unknown (an edit-selection or rejection state?) | H (structure), L (meaning) |
+| n … 5n−1 | u32 × n | zero except at events | **event word of sample *i***, at tail offset n + 4*i* | H |
 
-The earlier uint32-per-sample reader started 21 bytes before the tail. It
-reported an event at sample ⌊1.5·r⌋ + 6, which is the `legacy` time plus about
-20 ms. That reader saw the same byte as two different "codes" (512 and 2²⁵),
-depending on the record parity. They are one code.
+**Events.** An event is a non-zero event word. Its index is the sample index
+*s* (0-based), so its time is **s / fs** seconds from the first sample. The
+only value seen is **`0x00020000`** (bytes `00 00 02 00`). Its single
+non-zero byte is at tail offset p = n + 4s + 2, so s = (p − n − 2) / 4.
 
-Because the time base is open, `ng2edf.py` never attaches a time to an event by
-default. The `--events` table lists every non-empty record with its record
-index, tail and file byte offsets, code, raw bytes, and the time under **each**
-candidate (`time_s_span`, `time_s_legacy`, `time_s_sample`). In Python,
-`event_time_s(event, sample_rate, time_base)` requires an explicit
-`time_base`. Event timing is *not* written into the EDF.
+Every `0x00020000` word seen is on the **last sample of a 6-sample block**
+(s ≡ 5 mod 6, a 20 ms block at 300 Hz), and n has always been a multiple of 6.
+NeuroGuide apparently appends the amplifier data in 6-sample blocks.
+
+**`0x00020000` marks a splice.** The recording is discontinuous between
+sample *s* and sample *s* + 1. The evidence, from 384 recordings:
+
+- At 86 of the 87 words found, all channels jump at the same time, exactly
+  between *s* and *s* + 1. The jump is in the top 1 % of the file's
+  sample-to-sample differences, and usually the largest jump in the file.
+  This held for all 21 words in the 30 byte-checked recordings.
+- No comparable jump was found at a block boundary without a word.
+- A recording that contains a splice is shorter than the same participant's
+  other recordings of the same protocol (median difference about 9 s). This
+  fits a paused interval that is missing from the file.
+- After high-pass filtering, a brief broadband transient follows the splice
+  and lasts about 1 s.
+
+The most likely cause is an acquisition **Pause → Continue**. (NeuroGuide's
+version history introduces Pause/Continue together with event markers.) An
+amplifier reset or an impedance check during acquisition could leave the same
+trace, so this is not settled (§12). The word is **not** a user-placed Event
+Marker: it has a single value, and its position is quantised to the
+acquisition block. How user-placed Event Markers are stored is unknown; none
+are present in the files examined.
+
+**For analysis**, treat every splice as a segment boundary:
+
+- The EEG before and after a splice is not contiguous. If the splice is a
+  pause, the file time after it also lags the wall-clock time by the paused
+  interval. As far as is known, the file does not store that interval.
+- Do not let epochs, FFT/Welch windows, filters or spindle, slow-wave and
+  artifact detectors span a splice. Process the two sides separately, and
+  discard at least 1 s on either side of the splice; this also covers the
+  transient.
+- The EDF written by `ng2edf.py` is a plain, continuous EDF and does not mark
+  splices. Take them from the converter's warning or the `--events` table.
+  The discontinuity lies between `time_s` and `time_s + 1/fs`.
+
+**What `ng2edf.py` does.** It decodes both arrays. Every file with a splice
+gets one warning that lists the splice times. `--events` writes one row per
+non-zero word, with the columns `sample`, `time_s`, `word_hex`, `kind`
+(`splice` for `0x00020000`, `unknown` for any other value) and `note`.
+Non-zero per-sample bytes, unknown words and splices off the 6-sample grid
+also give warnings. The per-sample bytes do not change the EDF.
+
+An earlier version of this description read the tail as 6-byte records and
+listed three candidate time bases. That reading was wrong (§11).
 
 ## 9. Invariants
 
@@ -214,7 +245,7 @@ These held in every file examined. The converter checks those marked ✔
 2. off_A = 33.
 3. ✔ Section A ends exactly at off_B and section B ends exactly at off_data.
 4. ✔ off_tail ≥ off_data + 4·n_ch·n. The difference was 21 in every file (✔ warning only).
-5. ✔ File size = off_tail + 5·n.
+5. ✔ File size = off_tail + 5·n (n per-sample bytes, then n u32 event words).
 6. n is a multiple of 6.
 7. Constants: preamble `2, 4, 8` (✔ warning only), byte 0x0a = 0, u8 field = 1,
    u8 after the reference code = 0x47, montage tables 19 × (i, 55) twice,
@@ -222,9 +253,9 @@ These held in every file examined. The converter checks those marked ✔
 8. Channel table `0..18, 55, 56`. The block with code 55 is all zero. ✔ The
    block with code 56 is the mean of the EEG blocks.
 9. Non-finite values occur only as whole channels of `0xFFC00000`.
-10. The gap is all zero (✔ warning only). The tail is all zero except event
-    bytes, and every event is a single byte at tail offset ≡ 4 (mod 6) (✔
-    other non-zero records give a warning).
+10. The gap and the per-sample byte array are all zero (✔ warning only).
+    Every non-zero event word is `0x00020000`, at a sample s ≡ 5 (mod 6) (✔
+    other values or positions give a warning).
 
 ## 10. What ng2edf checks
 
@@ -240,7 +271,9 @@ These held in every file examined. The converter checks those marked ✔
 | unknown electrode codes | warning; the block is ignored |
 | unknown montage name | warning; labels get no reference suffix |
 | date / time of test not in the expected format | warning; the EDF falls back to `01.01.00` / `00.00.00` |
-| preamble constants, gap size/content, unknown tail records | warning |
+| preamble constants, gap size/content | warning |
+| tail: non-zero per-sample bytes (with their count), unrecognised event words, a splice off the 6-sample grid, non-zero bytes in an incomplete last word | warning |
+| splices (event word `0x00020000`) | one warning per file, with the splice times |
 | non-finite EEG samples | warning; the samples are set to 0 (mark the channel as bad downstream) |
 
 EEG channels are selected **by electrode code (0..18)**, not by position or by
@@ -259,8 +292,24 @@ description.
   56, then the u16 reference code 55.
 - **"`47 13 00 00 00` then pairs `(i, 0x37)`"**: the u8 0x47, then the u16
   row count 19 of montage table 1, then its rows `(i, 55)`.
-- **"22 data blocks, block 21 = markers"**: there are 21 f32 blocks. The
-  "block 21" read started 21 bytes before the tail section.
+- **"22 data blocks, block 21 = markers"** (the earlier converter): there are
+  21 f32 blocks. The "block 21" reader took one u32 per sample, starting 21
+  bytes before the tail section, i.e. n + 21 bytes before the event words.
+  - Its sample index is s_old = s + ⌊(n + 23)/4⌋. That is about a quarter of
+    the recording too late.
+  - It could not see events with s ≥ (3n − 23)/4, i.e. in roughly the last
+    quarter of a file.
+  - Its two "codes", 512 and 2²⁵, are the word `0x00020000` read through a
+    misaligned u32 frame.
+  - To convert its marker positions: s = s_old − ⌊(n + 23)/4⌋.
+- **"6-byte tail records, event code 2 in byte 4"** (an earlier version of
+  this description):
+  - The 6-byte period is an artefact of the block grid. Splices sit at
+    s = 6m + 5, so their `02` byte is at tail offset n + 24m + 22, which is
+    ≡ 4 (mod 6) because n is a multiple of 6.
+  - "Code 2" is byte 2 of the word `0x00020000`.
+  - The three candidate time bases derived from it (record/250, record/200
+    and record/300 s at 300 Hz) are all wrong.
 - **"NG version" (a string such as `34.00`)**: this is the age field (§4).
 - **"F-flag before strings"**: the length byte of an empty string (§4).
 
@@ -279,23 +328,26 @@ description.
    could hold impedances, bad-channel marks or a code-to-position map.
 8. **The 21 zero bytes** between the data and the tail: one byte per data
    block?
-9. **Tail content beyond events**: NeuroGuide says `.ng` stores "edited EEG
-   selections", so artifact or selection marks may live in the tail. All
-   non-event bytes were zero in the files examined.
-10. **Event time base** (`span` vs `legacy` vs `sample`, §8), and whether the
-    record grid starts at the tail offset or 21 bytes earlier (a ≤ 20 ms
-    difference). Also the meaning of event code 2.
-11. **Where the eyes-open / eyes-closed condition is stored.** Candidates are
+9. **The per-sample byte array** (§8). NeuroGuide says `.ng` stores "edited
+   EEG selections", so it may hold a selection or rejection state per
+   sample. It was all zero in the files examined.
+10. **Which operator action writes `0x00020000`.** Pause → Continue is the
+    most likely; an amplifier reset or an impedance check are alternatives.
+    What its two u16 halves mean (a type and a flag?) is a guess.
+11. **Where user-placed Event Markers are stored** (Eyes Open, Unspecified …).
+    None occur in the files examined: no other event-word value was seen.
+    They may use other values in the same word array, or be stored elsewhere.
+12. **Where the eyes-open / eyes-closed condition is stored.** Candidates are
     the u8 field before #12, `0x47`, or the tail.
-12. **Other setups**: other amplifiers, sample rates, channel counts, montages
+13. **Other setups**: other amplifiers, sample rates, channel counts, montages
     (average, Laplacian) and NeuroGuide versions.
 
 Most of these could be settled by saving test recordings from NeuroGuide
-with **dummy data**. For example: fill each Subject Information field with a
-distinct dummy text, toggle eyes open/closed, place an event marker at a
-known time near the end of a recording, make an edit selection or mark a bad
-channel, then compare the saved files byte by byte. Use only dummy data;
-never real participant data.
+with **dummy data**. For example: press Pause and Continue at known times
+during a recording, fill each Subject Information field with a distinct
+dummy text, toggle eyes open/closed, place event markers at known times,
+make an edit selection or mark a bad channel, then compare the saved files
+byte by byte. Use only dummy data; never real participant data.
 
 ## 13. Privacy
 
@@ -307,14 +359,15 @@ never real participant data.
   strings by their lengths only, and it decodes only the age, date and time
   slots after checking their fixed formats on the raw bytes. No other string
   is decoded, printed, logged or written. Error and warning messages contain
-  offsets and lengths only.
+  only offsets, lengths, counts, sample indices and times from the start of
+  the recording.
 - The **age is not written** to the EDF or anywhere else.
 - The **EDF patient field** is the de-identified case ID taken from the input
   folder name.
 - The **EDF start date and time** are copied from the date and time of test,
-  as the EDF header requires them. The `--events` table contains record
-  indices, byte offsets and times relative to the start of the recording, but
-  no header content.
+  as the EDF header requires them. The `--events` table contains sample
+  indices, times relative to the start of the recording and event-word
+  values, but no header content.
 - Do **not** publish or share `.ng` files, and do not publish hex dumps of
   their headers. Treat converted EDF files and event tables as participant
   data too.
