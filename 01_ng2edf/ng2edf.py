@@ -174,6 +174,15 @@ def parse_ng(filepath):
         base = NG_CHANNEL_NAMES_19[c] if c < len(NG_CHANNEL_NAMES_19) else f'Ch{c + 1}'
         labels.append(base + ref_suffix)
 
+    # A channel stored as NaN (e.g. an electrode removed in NeuroGuide) cannot
+    # be written to EDF. Set it to 0 and warn, so it is not written as garbage.
+    for c in range(n_eeg):
+        bad = ~np.isfinite(channels[c])
+        if bad.any():
+            channels[c] = np.where(bad, 0.0, channels[c]).astype(channels[c].dtype)
+            print(f"  WARNING: {labels[c]} has {int(bad.sum())} non-finite samples "
+                  f"(set to 0; mark it as a bad channel): {filepath}")
+
     return {
         'sample_rate': sample_rate,
         'total_samples': total_samples,
