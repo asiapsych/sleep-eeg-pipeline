@@ -13,6 +13,7 @@
 *.sqlite
 *.sqlite3
 # Subject-level tables may contain identifiable / clinical data
+*_events.tsv
 *.csv
 *.xlsx
 *.xls
