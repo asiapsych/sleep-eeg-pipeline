@@ -55,7 +55,12 @@
 ├── LICENSE                   # BSD 3-Clause
 ├── requirements.txt          # 鎖版本的 Python 相依套件
 ├── .gitignore                # 排除所有資料與快取
+├── CHANGELOG.md
 ├── 01_ng2edf/                # Python — NeuroGuide .ng → EDF
+│   ├── ng2edf.py
+│   ├── NG_FORMAT.md              # .ng 格式的位元組層級說明（英文）
+│   ├── tests/                    # 以合成 .ng 檔進行的單元測試
+│   └── README.md
 ├── 02_preprocess_eeglab/     # MATLAB — EDF → 前處理 → PSD (+ band power)
 │   ├── run_pipeline_auto.m       # 全自動入口
 │   ├── run_pipeline_manual.m     # 人工確認入口（論文採用）
@@ -90,9 +95,17 @@ pip install -r requirements.txt
 ## 快速開始
 
 ```bash
-# 1) NeuroGuide → EDF
+# 1) NeuroGuide → EDF   （加 --events 可另存每個檔案的事件標記表）
 python 01_ng2edf/ng2edf.py --input /path/to/raw_ng --output /path/to/raw_edf
 ```
+
+階段 1 補充：
+
+- 轉檔程式依檔頭中記錄的區段位置（section offsets）與通道代碼表，以結構化方式解析 `.ng`，只輸出代碼 0–18 的 19 個 EEG 通道。
+- 平均通道或檔案大小對不上時，該檔會報錯並略過，不會寫出錯位的資料。確定要轉時可加 `--lenient`。
+- `--events` 輸出的事件時間，目前並列三種候選時間基準，因為格式中的時間基準尚未確定。
+- 格式細節與尚未解開的問題見 [`01_ng2edf/NG_FORMAT.md`](01_ng2edf/NG_FORMAT.md)（英文）。
+- 測試：`python -m unittest discover -s 01_ng2edf/tests -v`。
 
 ```matlab
 % 2) MATLAB 前處理（互動式 MATLAB 中）
@@ -138,6 +151,10 @@ python 03_features/compute_features.py \
 本 repo **不包含任何**原始 EEG、受試者層級臨床資料、資料庫檔、ID 對照表或研究專屬 subject code。受試者層級資料受機構倫理審查、受試者同意與隱私法規限制，不公開。
 
 Pipeline 在設計上即注重隱私：階段 1 轉檔時，輸出 EDF 的受試者欄位寫入**去識別化代碼**（依輸入資料夾名），不會帶入 NeuroGuide 檔頭中可能存在的原始識別資訊。
+
+- 檔頭的受試者資訊區可能含姓名、出生日期、備註等，轉檔程式一律不解碼、不顯示、不寫出。
+- 年齡欄位（舊版程式誤稱為 version）同樣不寫入任何輸出。
+- EDF 的開始日期與時間取自 NeuroGuide 的施測日期與時間。
 
 ---
 
