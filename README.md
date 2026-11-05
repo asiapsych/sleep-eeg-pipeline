@@ -59,8 +59,11 @@ See each stage's `README.md` for full detail.
 ├── LICENSE                   # BSD 3-Clause
 ├── requirements.txt          # pinned Python dependencies
 ├── .gitignore                # excludes all data + caches
+├── CHANGELOG.md
 ├── 01_ng2edf/                # Python — NeuroGuide .ng → EDF
 │   ├── ng2edf.py
+│   ├── NG_FORMAT.md              # byte-level description of the .ng format
+│   ├── tests/                    # unit tests on synthetic .ng files
 │   └── README.md
 ├── 02_preprocess_eeglab/     # MATLAB — EDF → preprocessing → PSD (+ band power)
 │   ├── run_pipeline_auto.m       # fully automated entry
@@ -103,9 +106,14 @@ pip install -r requirements.txt
 ## Quick start
 
 ```bash
-# 1) NeuroGuide → EDF
+# 1) NeuroGuide → EDF   (add --events for a per-file table of recording splices)
 python 01_ng2edf/ng2edf.py --input /path/to/raw_ng --output /path/to/raw_edf
 ```
+
+Stage 1 prints a warning for every recording that contains a *splice*, a
+discontinuity most likely left by an acquisition pause. The EDF does not mark
+it, so keep epochs and filters from spanning it (see
+[`01_ng2edf/README.md`](01_ng2edf/README.md#events-recording-splices)).
 
 ```matlab
 % 2) MATLAB preprocessing (inside an interactive MATLAB session)
@@ -172,7 +180,8 @@ participant consent, and privacy regulations.
 
 The pipeline is privacy-aware by construction: stage 1 writes a **de-identified
 case code** (derived from the input folder name) into the EDF patient field and
-never propagates any identifier that may be stored in the NeuroGuide header.
+never propagates any identifier that may be stored in the NeuroGuide header
+(see [`01_ng2edf/NG_FORMAT.md`](01_ng2edf/NG_FORMAT.md#13-privacy)).
 
 ---
 
