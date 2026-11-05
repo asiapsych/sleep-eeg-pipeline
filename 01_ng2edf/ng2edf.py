@@ -113,7 +113,9 @@ def parse_ng(filepath):
         raise ValueError(
             f"Invalid sample_rate={sample_rate} or total_samples={total_samples}")
 
-    # Locate the data section: a run of >=10 0xFF bytes after the channel map.
+    # Locate the data section: it starts right after a fixed 220-byte run of
+    # 0xFF padding. Skipping the whole run would start one byte late when the
+    # first data byte is itself 0xFF.
     search_from = time_end + 10 + n_channel_map * 2
     data_offset = None
     i = search_from
@@ -123,7 +125,7 @@ def parse_ng(filepath):
             while j < len(data) and data[j] == 0xFF:
                 j += 1
             if j - i >= 10:
-                data_offset = j
+                data_offset = i + 220 if j - i >= 220 else j
                 break
         i += 1
 
