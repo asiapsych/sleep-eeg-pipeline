@@ -6,9 +6,10 @@ A reproducible pipeline that takes raw NeuroGuide EEG recordings all the way to
 analysis-ready **traditional band power** and **periodic / aperiodic (FOOOF)**
 feature tables.
 
-This repository contains **method code only** — no participant data. Downstream
-subtyping, clinical measures and statistics are part of each study's private
-analysis and are intentionally outside this open-source scope.
+This repository contains **code only** — no participant data. Stages 1–3 are the
+general, reusable pipeline. The study-specific code for the *Sleep Medicine*
+manuscript (preprocessing as run, statistics, tables and figures) is in
+[`04_manuscript_sleepmed_r1/`](04_manuscript_sleepmed_r1/README.md).
 
 ---
 
@@ -37,7 +38,7 @@ A three-stage linear workflow, run in order:
 └─────────────────────────┘
         │
         ▼
-   Feature tables (CSV)  ──►  (downstream statistics — not in this repo)
+   Feature tables (CSV)  ──►  statistics for the manuscript: 04_manuscript_sleepmed_r1/
 ```
 
 | Stage | Language | Input | Output |
@@ -67,7 +68,7 @@ See each stage's `README.md` for full detail.
 │   └── README.md
 ├── 02_preprocess_eeglab/     # MATLAB — EDF → preprocessing → PSD (+ band power)
 │   ├── run_pipeline_auto.m       # fully automated entry
-│   ├── run_pipeline_manual.m     # human-in-the-loop entry (used for the manuscript)
+│   ├── run_pipeline_manual.m     # human-in-the-loop entry
 │   ├── master_pipeline.m         # orchestrator (step1 … step5)
 │   ├── step1_preprocess.m … step5_export_bandpower.m
 │   ├── review_ica_smart.m / review_epochs_smart.m   # manual confirmation
@@ -75,8 +76,12 @@ See each stage's `README.md` for full detail.
 │   ├── helpers/                  # shared functions (bad-channel, rank, RNG, QC …)
 │   ├── chan_locs/                # bundled 10-20 channel-location file
 │   └── README.md
-└── 03_features/              # Python — PSD → traditional power + FOOOF
-    ├── compute_features.py
+├── 03_features/              # Python — PSD → traditional power + FOOOF
+│   ├── compute_features.py
+│   └── README.md
+└── 04_manuscript_sleepmed_r1/   # study-specific code for the Sleep Medicine manuscript
+    ├── matlab_pipeline_v2.3/     # preprocessing as run for the analysed data
+    ├── analysis/                 # statistics, tables and figures (Python)
     └── README.md
 ```
 
@@ -119,7 +124,7 @@ it, so keep epochs and filters from spanning it (see
 % 2) MATLAB preprocessing (inside an interactive MATLAB session)
 addpath('/path/to/eeglab');  eeglab nogui;
 cd 02_preprocess_eeglab
-run_pipeline_manual('/path/to/raw_edf')   % human-confirmed (manuscript mode)
+run_pipeline_manual('/path/to/raw_edf')   % human-confirmed
 % or run_pipeline_auto('/path/to/raw_edf') % fully automated
 ```
 
@@ -139,12 +144,16 @@ decisions are made:
 
 - **`run_pipeline_auto`** — every ICA component and epoch is decided
   automatically (ICLabel + rule-based rejection). Best for fast batch processing.
-- **`run_pipeline_manual`** *(used for the manuscript)* — the machine runs the
+- **`run_pipeline_manual`** — the machine runs the
   heavy steps, then a human confirms two ambiguous decisions: mid-confidence
   ICA components (`review_ica_smart`, showing topography / spectrum / activation)
   and epoch rejection for low-quality subjects (`review_epochs_smart`).
   High/low-confidence cases are auto-handled; human decisions are saved to
   `outputs/decisions/<ID>_ica_decisions.json` and reused on re-runs.
+
+The revised *Sleep Medicine* manuscript used neither entry point above but the
+fully automated, fixed-threshold version in
+[`04_manuscript_sleepmed_r1/matlab_pipeline_v2.3/`](04_manuscript_sleepmed_r1/README.md).
 
 ---
 

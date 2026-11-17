@@ -4,6 +4,14 @@ All notable changes to this repository are listed here.
 
 ## [Unreleased]
 
+### Added
+- `04_manuscript_sleepmed_r1/`: study-specific code for the revised *Sleep Medicine*
+  manuscript — the preprocessing pipeline as run for the analysed data
+  (`matlab_pipeline_v2.3`, including per-epoch and surface-Laplacian spectral
+  export) and the Python code for the principal component analysis, clustering
+  and its validation, all statistical analyses, tables and figures (`analysis/`).
+  No participant data, identifiers or outputs are included.
+
 ### Changed
 - `01_ng2edf`: the NeuroGuide header is parsed structurally, following the new
   byte-level description in `01_ng2edf/NG_FORMAT.md`:

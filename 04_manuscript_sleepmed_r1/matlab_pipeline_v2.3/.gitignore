@@ -1,0 +1,6 @@
+outputs/
+outputs.*/
+data/
+*.asv
+# participant identifiers stay on the local machine
+config/excluded_subjects.txt
