@@ -22,7 +22,6 @@ task_r1v_sleep_onset_check.py — Sleep Medicine R1：入睡困難與週期性 b
 輸出 outputs/補充資料/analysis/S_R1v_sleep_onset/
   01_primary.csv、02_all_components.csv、03_summary.md
 執行：python task_r1v_sleep_onset_check.py
-作者：Yu-Chi Huang（Sleep Medicine R1 補分析，2026-11-17）。AI 協助的範圍見倉庫 README「Provenance and AI assistance」。
 """
 
 from __future__ import annotations

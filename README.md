@@ -202,15 +202,19 @@ pipeline.
 
 ---
 
-## Provenance and AI assistance
+## Authorship and de-identification
 
-This public repository is a **de-identified and generalized rewrite** of the
-laboratory's internal, study-specific analysis pipeline. The original code
-contained participant-level file paths, identifier mapping tables, and database
-couplings that cannot be shared publicly. The extraction, de-identification, and
-generalization of the reusable components into this release were performed with
-the assistance of **Claude (Claude Opus 4.8, Anthropic)**. The released code was
-reviewed by the authors and is provided "as is", without warranty of any kind,
+All code in this repository was written by the authors. The laboratory's
+internal scripts can contain participant identifiers, participant-level file
+names, local paths and database couplings, none of which may be shared under the
+ethics approval. Because such details are easy to miss in a manual check, the
+code was reviewed with **Claude (Anthropic)** before release to locate and remove
+them: identifiers and paths are read from local configuration files that are not
+distributed, or were replaced with placeholders, and the reusable components were
+separated from the study-specific pipeline and generalized (Claude Opus 4.8 for
+the initial release of stages 01–03; Claude Opus 5.5 for
+`04_manuscript_sleepmed_r1/`). The authors checked the de-identified code before
+upload. The released code is provided "as is", without warranty of any kind,
 under the BSD 3-Clause License (see `LICENSE`).
 
 ---
