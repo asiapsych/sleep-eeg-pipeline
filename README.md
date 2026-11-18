@@ -226,6 +226,9 @@ The released code supports reproducibility of the EEG conversion, preprocessing,
 PSD extraction, and feature-generation workflow. Please cite the associated
 manuscript and this repository when reusing or adapting the code.
 
+Archived version used for the revised manuscript: v2.0.0,
+https://doi.org/10.5281/zenodo.24330571.
+
 **Suggested Data/Code Availability statement (for the manuscript):**
 
 > The de-identified and generalized analysis code used for EEG conversion,

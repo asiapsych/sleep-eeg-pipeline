@@ -2,7 +2,7 @@
 
 All notable changes to this repository are listed here.
 
-## [Unreleased]
+## [2.0.0] - 2026-11-18
 
 ### Added
 - `04_manuscript_sleepmed_r1/`: study-specific code for the revised *Sleep Medicine*

@@ -1,10 +1,12 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite both the associated manuscript and this repository."
-title: "Resting-State EEG Processing Pipeline (NeuroGuide to Features)"
+title: "insomnia-resting-eeg: Resting-state EEG pipeline and principal component analysis and clustering of insomnia symptoms"
 abstract: >-
-  De-identified and generalized research code for reproducing the EEG
-  conversion, preprocessing, PSD extraction, and periodic/aperiodic (FOOOF)
-  feature-generation workflow. No participant data are included.
+  De-identified research code for the EEG conversion, preprocessing, PSD
+  extraction and periodic/aperiodic (FOOOF) feature-generation workflow, and
+  for the principal component analysis and clustering of Insomnia Severity
+  Index items used in the associated manuscript. No participant data are
+  included.
 type: software
 authors:
   - name: "Sleep and Affective Science Lab, Division of Clinical Psychology, Department of Psychology, Asia University"
@@ -20,4 +22,6 @@ keywords:
   - aperiodic
   - preprocessing
   - NeuroGuide
-date-released: "2026-06-10"
+version: "2.0.0"
+doi: "10.5281/zenodo.24330571"
+date-released: "2026-11-18"
