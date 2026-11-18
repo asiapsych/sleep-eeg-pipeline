@@ -1,7 +1,6 @@
-"""用固定的九種方法比較 K = 2、3 的一致性與效果量。
+"""用固定的九種分群方法比較 K = 2、3 的一致性，並計算 gap statistic。
 
-LCA 吃原始 0–4 分，其餘方法吃 z 分數。
-同時報 ARI、ISI 與 beta 的差異，避免兩種檢查各挑一套有利的方法。"""
+分群只用 ISI 七題（ISI 總分 ≥ 9 者）。LCA 吃原始 0–4 分，其餘方法吃 z 分數。"""
 
 from __future__ import annotations
 import itertools
@@ -15,9 +14,8 @@ from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import StandardScaler
 from stepmix.stepmix import StepMix
 
-from _r1_common import AN, ISI_ITEMS, OUTCOME, SEED, hedges_g, load_all, mwu_p
+from _r1_common import AN, ISI_ITEMS, SEED, load_all
 
-Y = OUTCOME
 B = 2000
 OUT = AN / "S_R1e_clustering_robustness"
 OUT.mkdir(parents=True, exist_ok=True)
@@ -31,9 +29,7 @@ def P(*a):
 
 
 df = load_all()
-hc = df[df["group"] == "HC"]
 ins = df[df["group"] != "HC"].reset_index(drop=True)
-hcv = hc[Y].dropna()
 Ximp = SimpleImputer(strategy="median").fit_transform(ins[ISI_ITEMS])
 X = StandardScaler().fit_transform(Ximp)
 Xint = np.rint(Ximp).astype(int)
@@ -90,8 +86,8 @@ def ari_ci(a, b):
     return np.percentile(v, 2.5), np.percentile(v, 97.5)
 
 
-P("# S_R1e — 同一組分群方法的一致性與效果量\n")
-P(f"失眠 n = {n}；HC n = {len(hcv)}；配對 bootstrap B = {B}\n")
+P("# S_R1e — 九種分群方法的一致性\n")
+P(f"失眠症狀者 n = {n}；配對 bootstrap B = {B}\n")
 labels, rows, pair_rows = {}, [], []
 for k in (2, 3):
     labels[k] = {name: np.asarray(f(k)) for name, f in METHODS.items()}
@@ -99,25 +95,6 @@ for k in (2, 3):
     for name, lab in labels[k].items():
         s = pd.Series(lab)
         sizes = s.value_counts()
-        stats_ = []
-        for c in sizes.index:
-            d = ins[lab == c]
-            g, lo, hi, n1, _ = hedges_g(d[Y], hcv)
-            stats_.append(
-                dict(
-                    c=c,
-                    n=len(d),
-                    isi=d["ISI_T1"].mean(),
-                    g=g,
-                    lo=lo,
-                    hi=hi,
-                    p=mwu_p(d[Y], hcv),
-                    sca=(d["group"] == "SCA").mean(),
-                )
-            )
-        st = pd.DataFrame(stats_).dropna(subset=["g"])
-        big, small = st.loc[st["g"].idxmax()], st.loc[st["g"].idxmin()]
-        top_isi = st.loc[st["isi"].idxmax()]
         a = adjusted_rand_score(ref, lab)
         lo_, hi_ = (np.nan, np.nan) if name == "K-means" else ari_ci(ref, lab)
         rows.append(
@@ -129,16 +106,6 @@ for k in (2, 3):
                 ARI_vs_Kmeans=round(a, 3),
                 ARI_ci_low=round(lo_, 3) if lo_ == lo_ else "",
                 ARI_ci_high=round(hi_, 3) if hi_ == hi_ else "",
-                largest_g=round(big["g"], 3),
-                largest_ci=f"[{big['lo']:.2f}, {big['hi']:.2f}]",
-                largest_n=int(big["n"]),
-                largest_ISI_mean=round(big["isi"], 2),
-                largest_pct_SCA=round(100 * big["sca"], 1),
-                smallest_g=round(small["g"], 3),
-                smallest_ci=f"[{small['lo']:.2f}, {small['hi']:.2f}]",
-                smallest_n=int(small["n"]),
-                smallest_ISI_mean=round(small["isi"], 2),
-                largest_effect_is_highest_ISI="yes" if big["c"] == top_isi["c"] else "no",
             )
         )
     for m1, m2 in itertools.combinations(METHODS, 2):

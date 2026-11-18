@@ -5,7 +5,7 @@
 從 NeuroGuide 原始腦波檔，一路處理到可供統計分析的**傳統頻段功率**與**週期性／非週期性（aperiodic / periodic, FOOOF）**特徵表的可重現 pipeline。
 
 本 repo **只包含程式碼**，不含任何受試者資料。第 1–3 階段是通用、可重複使用的流程；
-*Sleep Medicine* 稿件專用的程式（實際執行的前處理、統計、圖表）放在
+*Sleep Medicine* 稿件專用的程式（實際執行的前處理，以及 ISI 題項的主成分分析與分群）放在
 [`04_manuscript_sleepmed_r1/`](04_manuscript_sleepmed_r1/README.md)。
 
 ---
@@ -35,7 +35,7 @@
 └─────────────────────────┘
         │
         ▼
-   特徵表 (CSV)  ──►  稿件的統計分析：04_manuscript_sleepmed_r1/
+   特徵表 (CSV)  ──►  稿件的主成分分析與分群：04_manuscript_sleepmed_r1/
 ```
 
 | 階段 | 語言 | 輸入 | 輸出 |
@@ -72,7 +72,7 @@
 ├── 03_features/              # Python — PSD → 傳統功率 + FOOOF
 └── 04_manuscript_sleepmed_r1/   # Sleep Medicine 稿件專用的程式
     ├── matlab_pipeline_v2.3/     # 分析資料實際使用的前處理版本
-    ├── analysis/                 # 統計、表、圖（Python）
+    ├── analysis/                 # ISI 題項的主成分分析與分群（Python）
     └── README.md
 ```
 
@@ -194,7 +194,7 @@ Pipeline 在設計上即注重隱私：階段 1 轉檔時，輸出 EDF 的受試
 
 **睡眠與情緒科學研究室**（Sleep and Affective Science Lab）
 亞洲大學心理學系 臨床心理學組
-網站：https://chang-lab-psychology-website-one.vercel.app/
+網站：https://sleepaffect.org
 
 ## 致謝
 

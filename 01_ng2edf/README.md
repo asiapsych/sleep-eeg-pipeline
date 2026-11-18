@@ -1,6 +1,6 @@
 # 01_ng2edf — NeuroGuide (.ng) → EDF
 
-> Language: **English** · 中文總覽見 [../README.zh-TW.md](../README.zh-TW.md)
+> Language: **English** · [繁體中文](README.zh-TW.md)
 
 A reverse-engineered reader for the proprietary NeuroGuide `.ng` binary format,
 with a standards-compliant EDF writer. NeuroGuide ships no public converter or

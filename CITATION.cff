@@ -8,10 +8,10 @@ abstract: >-
 type: software
 authors:
   - name: "Sleep and Affective Science Lab, Division of Clinical Psychology, Department of Psychology, Asia University"
-    website: "https://chang-lab-psychology-website-one.vercel.app/"
+    website: "https://sleepaffect.org"
 license: BSD-3-Clause
 repository-code: "https://github.com/asiapsych/sleep-eeg-pipeline"
-url: "https://chang-lab-psychology-website-one.vercel.app/"
+url: "https://sleepaffect.org"
 keywords:
   - EEG
   - EEGLAB

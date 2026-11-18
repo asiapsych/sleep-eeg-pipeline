@@ -1,6 +1,6 @@
 # 02_preprocess_eeglab — EDF → preprocessing → PSD
 
-> Language: **English** · 中文總覽見 [../README.zh-TW.md](../README.zh-TW.md)
+> Language: **English** · [繁體中文](README.zh-TW.md)
 
 A fully scripted, EEGLAB-based resting-state EEG preprocessing pipeline, from EDF
 to analysis-ready PSD (and optional band power). Function-based with centralized

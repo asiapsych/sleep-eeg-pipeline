@@ -1,6 +1,6 @@
 # 03_features — PSD → traditional power + FOOOF (periodic / aperiodic)
 
-> Language: **English** · 中文總覽見 [../README.zh-TW.md](../README.zh-TW.md)
+> Language: **English** · [繁體中文](README.zh-TW.md)
 
 From the `psd_<ID>.mat` files exported by stage 02, compute two feature families
 from the **same PSD with the same band definition**:

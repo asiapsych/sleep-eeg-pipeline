@@ -8,7 +8,8 @@ feature tables.
 
 This repository contains **code only** — no participant data. Stages 1–3 are the
 general, reusable pipeline. The study-specific code for the *Sleep Medicine*
-manuscript (preprocessing as run, statistics, tables and figures) is in
+manuscript (the preprocessing as run, and the principal component analysis and
+clustering of the ISI items) is in
 [`04_manuscript_sleepmed_r1/`](04_manuscript_sleepmed_r1/README.md).
 
 ---
@@ -38,7 +39,7 @@ A three-stage linear workflow, run in order:
 └─────────────────────────┘
         │
         ▼
-   Feature tables (CSV)  ──►  statistics for the manuscript: 04_manuscript_sleepmed_r1/
+   Feature tables (CSV)  ──►  PCA and clustering for the manuscript: 04_manuscript_sleepmed_r1/
 ```
 
 | Stage | Language | Input | Output |
@@ -81,7 +82,7 @@ See each stage's `README.md` for full detail.
 │   └── README.md
 └── 04_manuscript_sleepmed_r1/   # study-specific code for the Sleep Medicine manuscript
     ├── matlab_pipeline_v2.3/     # preprocessing as run for the analysed data
-    ├── analysis/                 # statistics, tables and figures (Python)
+    ├── analysis/                 # PCA and clustering of the ISI items (Python)
     └── README.md
 ```
 
@@ -241,7 +242,7 @@ manuscript and this repository when reusing or adapting the code.
 
 **Sleep and Affective Science Lab** (睡眠與情緒科學研究室)
 Division of Clinical Psychology, Department of Psychology, Asia University
-Website: https://chang-lab-psychology-website-one.vercel.app/
+Website: https://sleepaffect.org
 
 ## Acknowledgements
 

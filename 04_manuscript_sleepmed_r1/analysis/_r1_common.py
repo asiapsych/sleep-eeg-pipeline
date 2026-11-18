@@ -11,7 +11,6 @@ warnings.filterwarnings("ignore")
 
 import numpy as np
 import pandas as pd
-from scipy import stats
 from sklearn.cluster import KMeans
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
@@ -37,54 +36,6 @@ EXPECTED = {
     "submitted": dict(N=275, K2=[104, 61], K4=[67, 35, 34, 29]),
     "audited": dict(N=271, K2=[102, 60], K4=[61, 40, 31, 30]),
 }
-
-
-def hedges_g(a, b):
-    """a 對 b 的 Hedges' g 與 95% CI（與 task_z 相同實作）。回傳 g, lo, hi, n_a, n_b。"""
-    a = np.asarray(a, float)
-    b = np.asarray(b, float)
-    a = a[~np.isnan(a)]
-    b = b[~np.isnan(b)]
-    n1, n2 = len(a), len(b)
-    if n1 < 2 or n2 < 2:
-        return np.nan, np.nan, np.nan, n1, n2
-    sp = np.sqrt(((n1 - 1) * a.var(ddof=1) + (n2 - 1) * b.var(ddof=1)) / (n1 + n2 - 2))
-    if sp == 0:
-        return np.nan, np.nan, np.nan, n1, n2
-    g = (a.mean() - b.mean()) / sp * (1 - 3 / (4 * (n1 + n2) - 9))
-    se = np.sqrt((n1 + n2) / (n1 * n2) + g**2 / (2 * (n1 + n2)))
-    return g, g - 1.96 * se, g + 1.96 * se, n1, n2
-
-
-def icc_a1(x, y):
-    """ICC(A,1)：雙向隨機、絕對一致、單一測量。"""
-    d = np.column_stack([x, y])
-    n, k = d.shape
-    gm = d.mean()
-    msr = k * ((d.mean(1) - gm) ** 2).sum() / (n - 1)
-    msc = n * ((d.mean(0) - gm) ** 2).sum() / (k - 1)
-    mse = ((d - d.mean(1, keepdims=True) - d.mean(0, keepdims=True) + gm) ** 2).sum() / (
-        (n - 1) * (k - 1)
-    )
-    return (msr - mse) / (msr + (k - 1) * mse + k * (msc - mse) / n)
-
-
-def g_only(a, b):
-    return hedges_g(a, b)[0]
-
-
-def mwu_p(a, b):
-    a = pd.Series(a).dropna()
-    b = pd.Series(b).dropna()
-    if len(a) < 2 or len(b) < 2:
-        return np.nan
-    return float(stats.mannwhitneyu(a, b, alternative="two-sided").pvalue)
-
-
-def fmt_p(p):
-    if p is None or (isinstance(p, float) and np.isnan(p)):
-        return ""
-    return "<.001" if p < 0.001 else f"{p:.3f}".replace("0.", ".", 1)
 
 
 CLUSTER_INPUTS: dict = {}  # load_all() 最近一次計算的分群輸入：{sample: {'X_ins': 標準化後的七題矩陣, 'km': {K: 標籤}}}
