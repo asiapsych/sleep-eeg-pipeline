@@ -10,7 +10,7 @@ authors:
   - name: "Sleep and Affective Science Lab, Division of Clinical Psychology, Department of Psychology, Asia University"
     website: "https://sleepaffect.org"
 license: BSD-3-Clause
-repository-code: "https://github.com/sleepaffect/sleep-eeg-pipeline"
+repository-code: "https://github.com/sleepaffect/insomnia-resting-eeg"
 url: "https://sleepaffect.org"
 keywords:
   - EEG

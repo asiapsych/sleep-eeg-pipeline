@@ -230,7 +230,7 @@ manuscript and this repository when reusing or adapting the code.
 
 > The de-identified and generalized analysis code used for EEG conversion,
 > preprocessing, PSD extraction, and feature generation is available at
-> https://github.com/sleepaffect/sleep-eeg-pipeline. Raw EEG recordings,
+> https://github.com/sleepaffect/insomnia-resting-eeg. Raw EEG recordings,
 > participant-level clinical data, database files, and identifier mappings are
 > not publicly available because the ethics approval and participant consent for
 > this study did not include public sharing of participant-level data and
