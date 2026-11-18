@@ -39,11 +39,10 @@
 | 腳本 | 內容 |
 |---|---|
 | `task_r1w_pc_interpretation.py` | 七個 ISI 題項的主成分分析：負荷量、解釋變異、平行分析（2,000 組置換資料）與負荷量的重抽樣一致性（2,000 次） |
-| `task_e_bootstrap_stability.py` | 分群樣本的讀取；三群解的重抽樣 silhouette 與預測回原樣本的調整蘭德指數（供 `task_e2` 對照） |
 | `task_e2_bootstrap_selectK.py` | 二至六群的預測回原樣本重抽樣穩定度（1,000 次） |
 | `task_r1b_k234_comparison.py` | 二至六群的內部效度指標（silhouette、Calinski–Harabasz、Davies–Bouldin），並列 `task_e2` 的重抽樣穩定度 |
-| `task_r1e_clustering_robustness.py` | 九種分群方法（K-means、四種高斯混合模型、三種階層式方法、潛在類別分析）在兩群與三群下的分群結果與一致性，以及 gap statistic |
-| `_dynamic_n.py`、`_r1_common.py` | 共用程式：樣本定義與資料讀取 |
+| `task_r1e_clustering_robustness.py` | 兩群解在九種分群方法（K-means、四種高斯混合模型、三種階層式方法、潛在類別分析）之間的一致性，以及 gap statistic |
+| `_dynamic_n.py`、`_r1_common.py` | 共用程式：樣本定義、資料讀取，以及 K-means 兩組（低嚴重度、高嚴重度） |
 
 `task_r1b_k234_comparison.py` 與 `task_r1e_clustering_robustness.py` 會讀取 `task_e2_bootstrap_selectK.py` 的重抽樣結果，請先執行後者。
 

@@ -54,11 +54,10 @@ above. Scripts are run one at a time.
 | Script | Content |
 |---|---|
 | `task_r1w_pc_interpretation.py` | Principal component analysis of the seven ISI items: loadings, explained variance, parallel analysis (2,000 permuted data sets) and bootstrap congruence of the loadings (2,000 resamples) |
-| `task_e_bootstrap_stability.py` | Loader of the clustering sample; bootstrap silhouette and predict-back adjusted Rand index for the three-cluster solution (reference for `task_e2`) |
 | `task_e2_bootstrap_selectK.py` | Predict-back bootstrap stability (1,000 resamples) for two to six clusters |
 | `task_r1b_k234_comparison.py` | Internal validity indices (silhouette, Calinski–Harabasz, Davies–Bouldin) for two to six clusters, with the bootstrap stability from `task_e2` |
-| `task_r1e_clustering_robustness.py` | Nine clustering methods (K-means, four Gaussian mixture models, three hierarchical methods, latent class analysis) for two and three clusters, their agreement, and the gap statistic |
-| `_dynamic_n.py`, `_r1_common.py` | Shared code: sample definition and data loading |
+| `task_r1e_clustering_robustness.py` | Agreement of the two-cluster solution across nine clustering methods (K-means, four Gaussian mixture models, three hierarchical methods, latent class analysis), and the gap statistic |
+| `_dynamic_n.py`, `_r1_common.py` | Shared code: sample definition, data loading and the two K-means groups (lower and higher severity) |
 
 Run `task_e2_bootstrap_selectK.py` before `task_r1b_k234_comparison.py` and
 `task_r1e_clustering_robustness.py`, which read its bootstrap results.

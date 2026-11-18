@@ -1,4 +1,4 @@
-"""用固定的九種分群方法比較 K = 2、3 的一致性，並計算 gap statistic。
+"""用固定的九種分群方法檢查兩群解的一致性，並計算 gap statistic。
 
 分群只用 ISI 七題（ISI 總分 ≥ 9 者）。LCA 吃原始 0–4 分，其餘方法吃 z 分數。"""
 
@@ -89,7 +89,7 @@ def ari_ci(a, b):
 P("# S_R1e — 九種分群方法的一致性\n")
 P(f"失眠症狀者 n = {n}；配對 bootstrap B = {B}\n")
 labels, rows, pair_rows = {}, [], []
-for k in (2, 3):
+for k in (2,):
     labels[k] = {name: np.asarray(f(k)) for name, f in METHODS.items()}
     ref = labels[k]["K-means"]
     for name, lab in labels[k].items():
@@ -118,15 +118,15 @@ for k in (2, 3):
             )
         )
 tab = pd.DataFrame(rows)
-tab.to_csv(OUT / "01_methods_k2_k3.csv", index=False, encoding="utf-8-sig")
+tab.to_csv(OUT / "01_methods_k2.csv", index=False, encoding="utf-8-sig")
 pairs = pd.DataFrame(pair_rows)
 pairs.to_csv(OUT / "02_pairwise_ari.csv", index=False, encoding="utf-8-sig")
-for k in (2, 3):
+for k in (2,):
     P(f"## K = {k}：九種方法\n")
     P(tab[tab["K"] == k].drop(columns="K").to_markdown(index=False))
     P("")
 
-# 兩兩 ARI 平均：K = 2 對 K = 3
+# 兩兩 ARI 平均（K = 2）
 names = list(METHODS)
 combos = list(itertools.combinations(names, 2))
 km_combos = [(a, b) for a, b in combos if "K-means" in (a, b)]
@@ -139,35 +139,26 @@ def mean_ari(k, idx, cs):
 full = np.arange(n)
 summ = []
 for label, cs in [("all 36 method pairs", combos), ("8 pairs involving K-means", km_combos)]:
-    o2, o3 = mean_ari(2, full, cs), mean_ari(3, full, cs)
-    bs = np.array([[mean_ari(2, i, cs), mean_ari(3, i, cs)] for i in boot_idx[:1000]])
-    dlt = bs[:, 0] - bs[:, 1]
+    o2 = mean_ari(2, full, cs)
+    bs = np.array([mean_ari(2, i, cs) for i in boot_idx[:1000]])
     summ.append(
         dict(
             set=label,
             mean_ARI_K2=round(o2, 3),
-            K2_ci=f"[{np.percentile(bs[:, 0], 2.5):.3f}, {np.percentile(bs[:, 0], 97.5):.3f}]",
-            mean_ARI_K3=round(o3, 3),
-            K3_ci=f"[{np.percentile(bs[:, 1], 2.5):.3f}, {np.percentile(bs[:, 1], 97.5):.3f}]",
-            difference_K2_minus_K3=round(o2 - o3, 3),
-            diff_ci=f"[{np.percentile(dlt, 2.5):.3f}, {np.percentile(dlt, 97.5):.3f}]",
+            K2_ci=f"[{np.percentile(bs, 2.5):.3f}, {np.percentile(bs, 97.5):.3f}]",
         )
     )
 ar = pd.read_csv(AN / "S16_bootstrap_stability" / "05_selectK_bootstrap_ARI.csv").set_index("K")
 summ.append(
     dict(
-        set="K-means bootstrap re-clustering stability (S16, B = 1000)",
+        set="K-means bootstrap re-clustering stability (B = 1000)",
         mean_ARI_K2=ar.loc[2, "ari_median"],
         K2_ci=f"[{ar.loc[2, 'ari_2.5']}, {ar.loc[2, 'ari_97.5']}]",
-        mean_ARI_K3=ar.loc[3, "ari_median"],
-        K3_ci=f"[{ar.loc[3, 'ari_2.5']}, {ar.loc[3, 'ari_97.5']}]",
-        difference_K2_minus_K3=round(ar.loc[2, "ari_median"] - ar.loc[3, "ari_median"], 3),
-        diff_ci="",
     )
 )
 summ = pd.DataFrame(summ)
 summ.to_csv(OUT / "03_ari_summary.csv", index=False, encoding="utf-8-sig")
-P("## 跨方法一致性：K = 2 對 K = 3（ARI 慣用讀法：> .80 高、.60–.80 中等、< .60 低）\n")
+P("## 跨方法一致性：K = 2（ARI 慣用讀法：> .80 高、.60–.80 中等、< .60 低）\n")
 P(summ.to_markdown(index=False))
 P("")
 

@@ -1,7 +1,6 @@
-"""EEG 與 ISI 的共同樣本、排除名單及初投三群標籤。
+"""EEG 與 ISI 的共同樣本與排除名單。
 
-R1 預設用 audited；submitted 留給回覆信的初投樣本對照。
-群名沿用 MEW／MDI／SCA，新的兩群分析在 _r1_common.load_all。"""
+失眠症狀者（ISI ≥ 9）標為 INS、對照標為 HC；兩群分析在 _r1_common.load_all。"""
 
 from __future__ import annotations
 import json
@@ -10,9 +9,6 @@ import warnings
 from pathlib import Path
 import sqlite3
 import pandas as pd
-from sklearn.cluster import KMeans
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
 
 _PAPER_ROOT = Path(__file__).parent
 S17_RELPOWER_CSV = (
@@ -54,7 +50,6 @@ def excluded_ids(sample: str | None = None) -> list:
 
 
 SEED = 42
-DISPLAY_GROUPS = ["HC", "MEW", "MDI", "SCA"]
 
 _cache = {}
 
@@ -87,28 +82,7 @@ def _build_labels(sample: str | None = None) -> pd.DataFrame:
     ins = merged[merged["ISI_T1"] >= 9].copy()
     ctrl = merged[merged["ISI_T1"] < 9].copy()
 
-    X = StandardScaler().fit_transform(
-        SimpleImputer(strategy="median").fit_transform(ins[ISI_ITEMS])
-    )
-    km = KMeans(n_clusters=3, random_state=SEED, n_init=100)
-    ins["cluster_raw"] = km.fit_predict(X)
-
-    order = ins.groupby("cluster_raw")["ISI_T1"].mean().sort_values().index.tolist()
-    q23 = {
-        ci: ins.loc[ins["cluster_raw"] == ci, ["ISI_T1_Q2", "ISI_T1_Q3"]].mean().sum()
-        for ci in order
-    }
-    maint = max(q23, key=q23.get)
-    severe = order[2]
-    if maint == severe:
-        q57 = {
-            ci: ins.loc[ins["cluster_raw"] == ci, ["ISI_T1_Q5", "ISI_T1_Q7"]].mean().sum()
-            for ci in order
-        }
-        severe = max(q57, key=q57.get)
-    light = [c for c in order if c not in (maint, severe)][0]
-
-    ins["group"] = ins["cluster_raw"].map({maint: "MEW", light: "MDI", severe: "SCA"})
+    ins["group"] = "INS"
     ctrl["group"] = "HC"
     labels = pd.concat([ctrl, ins], ignore_index=True)[
         ["subject", "group", "ISI_T1", "AGE", "SEX", "BDI_T1", "BAI_T1", "EDU"] + ISI_ITEMS
@@ -122,46 +96,3 @@ def get_labels(sample: str | None = None) -> pd.DataFrame:
     if sample not in _cache:
         _cache[sample] = _build_labels(sample)
     return _cache[sample]
-
-
-def load_group_n() -> dict:
-    """{group_display: n} 字典，固定四群順序 HC/MEW/MDI/SCA。"""
-    df = get_labels()
-    vc = df["group"].value_counts().to_dict()
-    return {g: int(vc.get(g, 0)) for g in DISPLAY_GROUPS}
-
-
-def load_n_string(sep: str = ", ") -> str:
-    """產生目前 v2.2 群組樣本數字串，例如 'HC = 110, MEW = 47, MDI = 68, SCA = 50'。"""
-    gn = load_group_n()
-    return sep.join(f"{g} = {gn[g]}" for g in DISPLAY_GROUPS)
-
-
-def total_n() -> int:
-    return sum(load_group_n().values())
-
-
-def insomnia_n() -> int:
-    gn = load_group_n()
-    return gn["MEW"] + gn["MDI"] + gn["SCA"]
-
-
-def restrict_to_v22(
-    df: pd.DataFrame, id_col: str = "NEW_NUMBER", quiet: bool = False
-) -> pd.DataFrame:
-    """限制 DB DataFrame 到 v2.2 EEG 有效樣本（n=275）。
-
-    用法：
-        from _dynamic_n import restrict_to_v22
-        df = restrict_to_v22(df)  # 在 K-means 之前
-    """
-    if not S17_RELPOWER_CSV.exists():
-        if not quiet:
-            print("  [WARN] S17 CSV not found, restrict_to_v22 skipped")
-        return df
-    valid_sids = set(pd.read_csv(S17_RELPOWER_CSV)["subject"].drop_duplicates().tolist())
-    before = len(df)
-    out = df[df[id_col].isin(valid_sids)].copy()
-    if not quiet:
-        print(f"  [v2.2 new methodology] restrict_to_v22: {before} → {len(out)}")
-    return out

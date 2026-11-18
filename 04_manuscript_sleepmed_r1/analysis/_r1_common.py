@@ -14,7 +14,6 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import adjusted_rand_score
 
 import sqlite3
 
@@ -33,8 +32,8 @@ COV_COLS = ["AGE", "SEX", "EDU"]
 MIDLINE = ["FZ", "CZ", "PZ"]
 # 各樣本定義下預期的人數（防呆：資料或排除名單被動到時會報錯）
 EXPECTED = {
-    "submitted": dict(N=275, K2=[104, 61], K4=[67, 35, 34, 29]),
-    "audited": dict(N=271, K2=[102, 60], K4=[61, 40, 31, 30]),
+    "submitted": dict(N=275, K2=[104, 61]),
+    "audited": dict(N=271, K2=[102, 60]),
 }
 
 
@@ -42,7 +41,7 @@ CLUSTER_INPUTS: dict = {}  # load_all() 最近一次計算的分群輸入：{sam
 
 
 def load_data(sample: str | None = None) -> pd.DataFrame:
-    """EEG∩ISI 樣本（人數依 sample 而定，見 EXPECTED）：subject、原投稿的三群標籤、ISI、人口學、量表、periodic beta。"""
+    """EEG∩ISI 樣本（人數依 sample 而定，見 EXPECTED）：subject、組別（HC／INS）、ISI、人口學、量表、periodic beta。"""
     df = get_labels(sample).merge(
         pd.read_csv(F_S10)[["subject", OUTCOME]], on="subject", how="left"
     )
@@ -59,7 +58,7 @@ def load_data(sample: str | None = None) -> pd.DataFrame:
 
 
 def load_all(sample: str | None = None) -> pd.DataFrame:
-    """依 subject 升冪（人數依 sample 而定）；含 K=3 標籤、現算 K=2／K=4 標籤、所有 EEG 指標。"""
+    """依 subject 升冪（人數依 sample 而定）；含 K = 2 分群標籤（Lower／Higher）與所有 EEG 指標。"""
     sample = sample or SAMPLE
     exp = EXPECTED[sample]
     df = load_data(sample).copy()
@@ -90,10 +89,9 @@ def load_all(sample: str | None = None) -> pd.DataFrame:
     X = StandardScaler().fit_transform(
         SimpleImputer(strategy="median").fit_transform(ins[ISI_ITEMS])
     )
-    km = {k: KMeans(n_clusters=k, random_state=SEED, n_init=100).fit_predict(X) for k in (2, 3, 4)}
-    assert adjusted_rand_score(ins["group"], km[3]) > 0.9999, "K=3 無法重現主分析標籤"
+    km = {2: KMeans(n_clusters=2, random_state=SEED, n_init=100).fit_predict(X)}
 
-    for k in (2, 4):
+    for k in (2,):
         raw = pd.Series(km[k], index=ins.index)
         order = (
             ins.groupby(raw)["ISI_T1"].mean().sort_values().index.tolist()
@@ -103,8 +101,6 @@ def load_all(sample: str | None = None) -> pd.DataFrame:
         df.loc[ins_mask, f"k{k}"] = raw.map(name).values
     k2n = sorted(df.loc[ins_mask, "k2"].value_counts().tolist(), reverse=True)
     assert exp["K2"] is None or k2n == exp["K2"], k2n
-    k4n = sorted(df.loc[ins_mask, "k4"].value_counts().tolist(), reverse=True)
-    assert exp["K4"] is None or k4n == exp["K4"], k4n
     df["k2"] = df["k2"].replace({"K2_C1": "Lower", "K2_C2": "Higher"})  # K=2：低分群／高分群
     # 分群用的矩陣與標籤不掛在 df.attrs（attrs 內有陣列時，pandas 在合併兩個衍生資料表時會比較失敗）
     CLUSTER_INPUTS[sample] = dict(X_ins=X, km=km)

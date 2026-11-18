@@ -1,11 +1,11 @@
-"""把 task_e 的 predict-back bootstrap 延伸到 K = 2–6。
+"""K-means 二至六群的 predict-back bootstrap 穩定度。
 
-每個 K 重設同一個 RNG；K = 3 要能逐次重現 task_e。
-不要混用舊的 in-bag ARI，兩種重抽程序的數字不能直接並列。"""
+每次以重抽樣本擬合，再預測回原樣本，計算與參考解的 ARI；每個 K 重設同一個 RNG。"""
 
 from __future__ import annotations
 
 from pathlib import Path
+import sqlite3
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -17,19 +17,55 @@ from sklearn.impute import SimpleImputer
 from sklearn.metrics import adjusted_rand_score
 from sklearn.preprocessing import StandardScaler
 
-from task_e_bootstrap_stability import load_clustering_sample, ISI_ITEMS, SEED
+from _dynamic_n import DB_PATH as _DB
+
+DB_PATH = Path(_DB)
+SEED = 42
+ISI_ITEMS = [f"ISI_T1_Q{i}" for i in range(1, 8)]
 
 OUT_DIR = Path(__file__).parent / "outputs" / "補充資料" / "analysis" / "S16_bootstrap_stability"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 K_RANGE = list(range(2, 7))
-N_BOOT = 1000  # 與 task_e 相同
+N_BOOT = 1000
+
+
+def load_clustering_sample():
+    """分群樣本：具可用 EEG、未排除、ISI ≥ 9 且七題完整。"""
+    quoted = ", ".join(f'"{c}"' for c in ["NEW_NUMBER", "ISI_T1"] + ISI_ITEMS)
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql(
+        f"SELECT {quoted} FROM isi_raw_data WHERE ISI_T1 IS NOT NULL AND ISI_T1_Q1 IS NOT NULL",
+        conn,
+    )
+    conn.close()
+    for c in df.columns:
+        if c != "NEW_NUMBER":
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+    # bootstrap 只用 EEG 有效樣本，和主分析的納入條件一致。
+    from pathlib import Path as _P
+
+    relp_csv = (
+        _P(__file__).parent
+        / "outputs"
+        / "補充資料"
+        / "analysis"
+        / "S17_relative_power"
+        / "01_relpower_subject.csv"
+    )
+    if relp_csv.exists():
+        valid_sids = set(pd.read_csv(relp_csv)["subject"].drop_duplicates().tolist())
+        from _dynamic_n import excluded_ids
+
+        df = df[df["NEW_NUMBER"].isin(valid_sids) & ~df["NEW_NUMBER"].isin(excluded_ids())].copy()
+    df_ins = df[df["ISI_T1"] >= 9].dropna(subset=ISI_ITEMS).copy()
+    return df_ins
 
 
 def main():
     df_ins = load_clustering_sample()
     n = len(df_ins)
-    print(f"分群樣本 n = {n}（與 task_e 同一 loader）")
+    print(f"分群樣本 n = {n}")
 
     imp = SimpleImputer(strategy="median")
     scl = StandardScaler()
@@ -38,11 +74,11 @@ def main():
 
     rows = []
     for k in K_RANGE:
-        # 參考解：與 task_e 相同設定（n_init=100, seed=42）
+        # 參考解（n_init=100, seed=42）
         km_ref = KMeans(n_clusters=k, random_state=SEED, n_init=100)
         lab_ref = km_ref.fit_predict(X)
 
-        # 每個 K 各自重設 RNG，每輪只抽一次樣本，才可和 task_e 對照。
+        # 每個 K 各自重設 RNG，每輪只抽一次樣本。
         rng = np.random.default_rng(SEED)
         aris = []
         for b in range(N_BOOT):
@@ -72,14 +108,6 @@ def main():
     out = pd.DataFrame(rows)
     out.to_csv(OUT_DIR / "05_selectK_bootstrap_ARI.csv", index=False)
     print(f"\n✓ 寫入 {OUT_DIR / '05_selectK_bootstrap_ARI.csv'}")
-
-    # 自我驗證：K=3 必須重現 task_e 的已發表數字
-    k3 = out.loc[out["K"] == 3].iloc[0]
-    ok = abs(k3["ari_median"] - 0.6192) < 5e-5
-    print(
-        f"K=3 重現 task_e 0.6192: {'✓ 一致' if ok else '✗ 不一致——請檢查'} "
-        f"(本次 {k3['ari_median']}, [{k3['ari_2.5']}, {k3['ari_97.5']}])"
-    )
 
 
 if __name__ == "__main__":
