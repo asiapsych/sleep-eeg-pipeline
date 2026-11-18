@@ -1,0 +1,14 @@
+# Versions used for the analyses in the revised manuscript (Python 3.12).
+numpy==2.2.6
+scipy==1.16.3
+pandas==2.3.3
+statsmodels==0.14.6
+patsy==1.0.2
+scikit-learn==1.8.0
+stepmix==3.0.0
+fooof==1.1.1
+mne==1.11.0
+neurokit2==0.2.12
+matplotlib==3.10.8
+openpyxl==3.1.5
+python-docx==1.2.0

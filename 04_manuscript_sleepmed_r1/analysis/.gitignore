@@ -1,0 +1,6 @@
+# participant identifiers and local paths stay on the local machine
+local_settings.json
+# all outputs (some are participant-level)
+outputs/
+work/
+__pycache__/

@@ -1,0 +1,12 @@
+{
+  "excluded": [],
+  "excluded_eligibility": [],
+  "paths": {
+    "db": "",
+    "eeg_pipeline_root": "",
+    "v1_labdata": "",
+    "hrv_raw": "",
+    "eeg_edf": "",
+    "notes_dir": ""
+  }
+}

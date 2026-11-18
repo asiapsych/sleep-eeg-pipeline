@@ -6,9 +6,10 @@ A reproducible pipeline that takes raw NeuroGuide EEG recordings all the way to
 analysis-ready **traditional band power** and **periodic / aperiodic (FOOOF)**
 feature tables.
 
-This repository contains **method code only** — no participant data. Downstream
-subtyping, clinical measures and statistics are part of each study's private
-analysis and are intentionally outside this open-source scope.
+This repository contains **code only** — no participant data. Stages 1–3 are the
+general, reusable pipeline. The study-specific code for the *Sleep Medicine*
+manuscript (preprocessing as run, statistics, tables and figures) is in
+[`04_manuscript_sleepmed_r1/`](04_manuscript_sleepmed_r1/README.md).
 
 ---
 
@@ -37,7 +38,7 @@ A three-stage linear workflow, run in order:
 └─────────────────────────┘
         │
         ▼
-   Feature tables (CSV)  ──►  (downstream statistics — not in this repo)
+   Feature tables (CSV)  ──►  statistics for the manuscript: 04_manuscript_sleepmed_r1/
 ```
 
 | Stage | Language | Input | Output |
@@ -75,8 +76,12 @@ See each stage's `README.md` for full detail.
 │   ├── helpers/                  # shared functions (bad-channel, rank, RNG, QC …)
 │   ├── chan_locs/                # bundled 10-20 channel-location file
 │   └── README.md
-└── 03_features/              # Python — PSD → traditional power + FOOOF
-    ├── compute_features.py
+├── 03_features/              # Python — PSD → traditional power + FOOOF
+│   ├── compute_features.py
+│   └── README.md
+└── 04_manuscript_sleepmed_r1/   # study-specific code for the Sleep Medicine manuscript
+    ├── matlab_pipeline_v2.3/     # preprocessing as run for the analysed data
+    ├── analysis/                 # statistics, tables and figures (Python)
     └── README.md
 ```
 
