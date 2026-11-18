@@ -65,7 +65,7 @@
 │   └── README.md
 ├── 02_preprocess_eeglab/     # MATLAB — EDF → 前處理 → PSD (+ band power)
 │   ├── run_pipeline_auto.m       # 全自動入口
-│   ├── run_pipeline_manual.m     # 人工確認入口
+│   ├── run_pipeline_manual.m     # 人工確認入口（論文採用）
 │   ├── master_pipeline.m         # 流程協調（step1 … step5）
 │   ├── step1 … step5、review_*_smart、config/、helpers/、chan_locs/
 │   └── README.md
@@ -119,7 +119,7 @@ python 01_ng2edf/ng2edf.py --input /path/to/raw_ng --output /path/to/raw_edf
 % 2) MATLAB 前處理（互動式 MATLAB 中）
 addpath('/path/to/eeglab');  eeglab nogui;
 cd 02_preprocess_eeglab
-run_pipeline_manual('/path/to/raw_edf')   % 人工確認
+run_pipeline_manual('/path/to/raw_edf')   % 人工確認（論文模式）
 % 或 run_pipeline_auto('/path/to/raw_edf') % 全自動
 ```
 
@@ -136,10 +136,7 @@ python 03_features/compute_features.py \
 階段 2 提供兩個對等的一鍵入口，共用完全相同的 step1–step5 邏輯與參數，差別只在**模糊判斷**怎麼決定：
 
 - **`run_pipeline_auto`** — 所有 ICA 成分與 epoch 全自動決定（ICLabel + 規則拒絕），適合大批快速處理。
-- **`run_pipeline_manual`** — 機器跑完重步驟後，由人工確認兩處模糊判斷：中信心度的 ICA 成分（`review_ica_smart`，顯示 topoplot／頻譜／activation）與低品質個案的 epoch 拒絕（`review_epochs_smart`）。高/低信心自動處理；人工決定寫入 `outputs/decisions/<ID>_ica_decisions.json`，重跑沿用。
-
-*Sleep Medicine* 修訂稿用的不是上面兩個入口，而是全自動、固定門檻的版本：
-[`04_manuscript_sleepmed_r1/matlab_pipeline_v2.3/`](04_manuscript_sleepmed_r1/README.md)。
+- **`run_pipeline_manual`**（論文採用）— 機器跑完重步驟後，由人工確認兩處模糊判斷：中信心度的 ICA 成分（`review_ica_smart`，顯示 topoplot／頻譜／activation）與低品質個案的 epoch 拒絕（`review_epochs_smart`）。高/低信心自動處理；人工決定寫入 `outputs/decisions/<ID>_ica_decisions.json`，重跑沿用。
 
 ---
 
