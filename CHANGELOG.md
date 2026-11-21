@@ -2,6 +2,13 @@
 
 All notable changes to this repository are listed here.
 
+## [Unreleased]
+
+### Changed
+- `task_r1e_clustering_robustness.py`: the number of clusters is set by `K`
+  (default 2, as in the manuscript). `K = 3` reproduces Table C of the response
+  letter (three clusters, mean ARI .38).
+
 ## [2.0.1] - 2026-11-21
 
 ### Changed

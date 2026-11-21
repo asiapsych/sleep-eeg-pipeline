@@ -1,4 +1,4 @@
-"""Two-cluster solutions from nine clustering methods, and the gap statistic."""
+"""Compare nine clustering methods and compute the gap statistic."""
 
 from itertools import combinations
 
@@ -13,6 +13,9 @@ from stepmix.stepmix import StepMix
 from _r1_common import AN, ISI_ITEMS, SEED, load_all, prepare_isi_items
 
 B = 2000
+# Keep K = 2 for the manuscript. Set K = 3 to reproduce Table C in the response letter.
+# Some output files are overwritten when K changes; keep the previous run first.
+K = 2
 OUT = AN / "S_R1e_clustering_robustness"
 OUT.mkdir(parents=True, exist_ok=True)
 summary_lines = []
@@ -26,7 +29,7 @@ def report(line):
 df = load_all()
 ins = df[df["group"] != "HC"].reset_index(drop=True)
 filled_items, X = prepare_isi_items(ins[ISI_ITEMS])
-# LCA uses the 0-4 item categories; the other methods use z scores.
+# LCA treats the imputed 0-4 item scores as categories; the other methods use z scores.
 categories = np.rint(filled_items).astype(int)
 
 rng = np.random.default_rng(20261112)
@@ -41,7 +44,7 @@ def ari_ci(a, b):
 
 report("# Agreement across nine clustering methods\n")
 report(f"participants with insomnia symptoms: n = {n}; paired bootstrap B = {B}\n")
-labels = {"K-means": KMeans(n_clusters=2, random_state=SEED, n_init=100).fit_predict(X)}
+labels = {"K-means": KMeans(n_clusters=K, random_state=SEED, n_init=100).fit_predict(X)}
 for name, covariance in (
     ("spherical", "spherical"),
     ("diagonal", "diag"),
@@ -49,7 +52,7 @@ for name, covariance in (
     ("full", "full"),
 ):
     labels[f"GMM {name}"] = GaussianMixture(
-        n_components=2,
+        n_components=K,
         covariance_type=covariance,
         random_state=SEED,
         n_init=30,
@@ -58,10 +61,10 @@ for name, covariance in (
     ).fit_predict(X)
 for name, linkage in (("Ward", "ward"), ("average", "average"), ("complete", "complete")):
     labels[f"Hierarchical {name}"] = AgglomerativeClustering(
-        n_clusters=2, linkage=linkage
+        n_clusters=K, linkage=linkage
     ).fit_predict(X)
 lca = StepMix(
-    n_components=2,
+    n_components=K,
     measurement="categorical",
     n_init=20,
     max_iter=300,
@@ -79,7 +82,7 @@ for name, assigned in labels.items():
     low, high = (np.nan, np.nan) if name == "K-means" else ari_ci(reference, assigned)
     rows.append(
         dict(
-            K=2,
+            K=K,
             method=name,
             sizes="/".join(map(str, sorted(sizes.tolist(), reverse=True))),
             min_cluster_n=int(sizes.min()),
@@ -91,22 +94,22 @@ for name, assigned in labels.items():
 
 method_pairs = list(combinations(labels, 2))
 pair_rows = [
-    dict(K=2, method_1=a, method_2=b, ARI=round(adjusted_rand_score(labels[a], labels[b]), 3))
+    dict(K=K, method_1=a, method_2=b, ARI=round(adjusted_rand_score(labels[a], labels[b]), 3))
     for a, b in method_pairs
 ]
 method_table = pd.DataFrame(rows)
-method_table.to_csv(OUT / "01_methods_k2.csv", index=False, encoding="utf-8-sig")
+method_table.to_csv(OUT / f"01_methods_k{K}.csv", index=False, encoding="utf-8-sig")
 pair_table = pd.DataFrame(pair_rows)
 pair_table.to_csv(OUT / "02_pairwise_ari.csv", index=False, encoding="utf-8-sig")
-report("## K = 2, nine methods\n")
+report(f"## K = {K}, nine methods\n")
 report(method_table.drop(columns="K").to_markdown(index=False))
 report("")
 
-# Both methods are compared on the same resampled participants.
 kmeans_pairs = [pair for pair in method_pairs if "K-means" in pair]
 
 
 def mean_ari(indices, pairs):
+    # Each pair uses the same resampled participants for both sets of labels.
     return np.mean([adjusted_rand_score(labels[a][indices], labels[b][indices]) for a, b in pairs])
 
 
@@ -121,21 +124,25 @@ for label, pairs in [
     summ.append(
         dict(
             set=label,
-            mean_ARI_K2=round(observed_ari, 3),
-            K2_ci=f"[{np.percentile(bootstrap_ari, 2.5):.3f}, {np.percentile(bootstrap_ari, 97.5):.3f}]",
+            **{
+                f"mean_ARI_K{K}": round(observed_ari, 3),
+                f"K{K}_ci": f"[{np.percentile(bootstrap_ari, 2.5):.3f}, {np.percentile(bootstrap_ari, 97.5):.3f}]",
+            },
         )
     )
 ar = pd.read_csv(AN / "S16_bootstrap_stability" / "05_selectK_bootstrap_ARI.csv").set_index("K")
 summ.append(
     dict(
         set="K-means bootstrap re-clustering stability (B = 1000)",
-        mean_ARI_K2=ar.loc[2, "ari_median"],
-        K2_ci=f"[{ar.loc[2, 'ari_2.5']}, {ar.loc[2, 'ari_97.5']}]",
+        **{
+            f"mean_ARI_K{K}": ar.loc[K, "ari_median"],
+            f"K{K}_ci": f"[{ar.loc[K, 'ari_2.5']}, {ar.loc[K, 'ari_97.5']}]",
+        },
     )
 )
 summ = pd.DataFrame(summ)
 summ.to_csv(OUT / "03_ari_summary.csv", index=False, encoding="utf-8-sig")
-report("## Agreement between methods (K = 2)\n")
+report(f"## Agreement between methods (K = {K})\n")
 report(summ.to_markdown(index=False))
 report("")
 
@@ -146,7 +153,7 @@ def log_within_cluster_dispersion(items, k, n_init=20):
     return np.log(KMeans(n_clusters=k, random_state=SEED, n_init=n_init).fit(items).inertia_)
 
 
-# reference data: uniform within the range of the principal-component scores
+# Draw uniform reference samples over the observed range of each PC score.
 pca = PCA().fit(X)
 rotated = pca.transform(X)
 lower, upper = rotated.min(0), rotated.max(0)
