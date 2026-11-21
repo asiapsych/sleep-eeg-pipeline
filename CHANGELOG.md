@@ -2,7 +2,7 @@
 
 All notable changes to this repository are listed here.
 
-## [Unreleased]
+## [2.0.2] - 2026-11-21
 
 ### Changed
 - `task_r1e_clustering_robustness.py`: the number of clusters is set by `K`

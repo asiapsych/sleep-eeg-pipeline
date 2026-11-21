@@ -193,8 +193,8 @@ The released code supports reproducibility of the EEG conversion, preprocessing,
 PSD extraction, and feature-generation workflow. Please cite the associated
 manuscript and this repository when reusing or adapting the code.
 
-Archived version used for the revised manuscript: v2.0.1,
-https://doi.org/10.5281/zenodo.24413255.
+Archived version used for the revised manuscript: v2.0.2,
+https://doi.org/10.5281/zenodo.24415381.
 
 **Suggested Data/Code Availability statement (for the manuscript):**
 
