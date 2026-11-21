@@ -1,42 +1,15 @@
-# 靜息態 EEG 處理 Pipeline（NeuroGuide → 特徵）
+# 靜息態 EEG 處理與分析
 
 [English](README.md) | **中文**
 
-從 NeuroGuide 原始腦波檔，一路處理到可供統計分析的**傳統頻段功率**與**週期性／非週期性（aperiodic / periodic, FOOOF）**特徵表的可重現 pipeline。
+第 1–3 階段將 NeuroGuide 腦波轉成 EDF，完成前處理後再擷取頻譜特徵。這裡只提供程式碼，受試者資料由研究團隊保管。
 
-本 repo **只包含程式碼**，不含任何受試者資料。第 1–3 階段是通用、可重複使用的流程；
-*Sleep Medicine* 稿件專用的程式（實際執行的前處理，以及 ISI 題項的主成分分析與分群）放在
+*Sleep Medicine* 稿件使用的前處理，以及 ISI 題項的主成分分析與分群程式，見
 [`04_manuscript_sleepmed_r1/`](04_manuscript_sleepmed_r1/README.md)。
 
 ---
 
-## Pipeline 總覽
-
-三段式線性流程，依序執行：
-
-```
-  原始 .ng (NeuroGuide)
-        │
-        ▼
-┌─────────────────────────┐
-│ 01_ng2edf  (Python)     │   逆向解析 NeuroGuide 二進位格式，輸出標準 EDF
-└─────────────────────────┘
-        │  *.edf
-        ▼
-┌─────────────────────────┐
-│ 02_preprocess_eeglab    │   濾波 → 壞通道偵測/插補 → CleanLine → ICA(ICLabel)
-│   (MATLAB + EEGLAB)     │   → 平均參考 → 切 epoch → 拒絕 → 匯出 PSD
-└─────────────────────────┘
-        │  psd_<ID>.mat
-        ▼
-┌─────────────────────────┐
-│ 03_features  (Python)   │   傳統頻段功率（絕對/相對/比值）
-│                         │   + FOOOF 非週期性 exponent/offset + 週期性峰值
-└─────────────────────────┘
-        │
-        ▼
-   特徵表 (CSV)  ──►  稿件的主成分分析與分群：04_manuscript_sleepmed_r1/
-```
+## 處理步驟
 
 | 階段 | 語言 | 輸入 | 輸出 |
 |------|------|------|------|
@@ -58,18 +31,18 @@
 ├── requirements.txt          # 鎖版本的 Python 相依套件
 ├── .gitignore                # 排除所有資料與快取
 ├── CHANGELOG.md
-├── 01_ng2edf/                # Python — NeuroGuide .ng → EDF
+├── 01_ng2edf/                # Python，將 NeuroGuide .ng 轉成 EDF
 │   ├── ng2edf.py
 │   ├── NG_FORMAT.md              # .ng 格式的位元組層級說明（英文）
 │   ├── tests/                    # 以合成 .ng 檔進行的單元測試
 │   └── README.md
-├── 02_preprocess_eeglab/     # MATLAB — EDF → 前處理 → PSD (+ band power)
+├── 02_preprocess_eeglab/     # MATLAB，前處理與匯出 PSD
 │   ├── run_pipeline_auto.m       # 全自動入口
 │   ├── run_pipeline_manual.m     # 人工確認入口（論文採用）
 │   ├── master_pipeline.m         # 流程協調（step1 … step5）
 │   ├── step1 … step5、review_*_smart、config/、helpers/、chan_locs/
 │   └── README.md
-├── 03_features/              # Python — PSD → 傳統功率 + FOOOF
+├── 03_features/              # Python，從 PSD 計算頻段功率與 FOOOF
 └── 04_manuscript_sleepmed_r1/   # Sleep Medicine 稿件專用的程式
     ├── matlab_pipeline_v2.3/     # 分析資料實際使用的前處理版本
     ├── analysis/                 # ISI 題項的主成分分析與分群（Python）
@@ -101,7 +74,7 @@ pip install -r requirements.txt
 ## 快速開始
 
 ```bash
-# 1) NeuroGuide → EDF   （加 --events 可另存每個檔案的錄製接縫表）
+# 1) 將 NeuroGuide 檔案轉成 EDF   （加 --events 可另存每個檔案的錄製接縫表）
 python 01_ng2edf/ng2edf.py --input /path/to/raw_ng --output /path/to/raw_edf
 ```
 
@@ -124,7 +97,7 @@ run_pipeline_manual('/path/to/raw_edf')   % 人工確認（論文模式）
 ```
 
 ```bash
-# 3) PSD → 特徵
+# 3) 從 PSD 擷取特徵
 python 03_features/compute_features.py \
     --psd-dir /path/to/outputs/psd_mat --out-dir /path/to/features
 ```
@@ -158,7 +131,7 @@ python 03_features/compute_features.py \
 
 本 repo **不包含任何**原始 EEG、受試者層級臨床資料、資料庫檔、ID 對照表或研究專屬 subject code。受試者層級資料受機構倫理審查、受試者同意與隱私法規限制，不公開。
 
-Pipeline 在設計上即注重隱私：階段 1 轉檔時，輸出 EDF 的受試者欄位寫入**去識別化代碼**（依輸入資料夾名），不會帶入 NeuroGuide 檔頭中可能存在的原始識別資訊。
+第 1 階段從輸入資料夾名稱取得去識別化代碼，寫入 EDF 的受試者欄位。轉檔程式不會複製 NeuroGuide 檔頭裡的身分資訊。
 
 - 檔頭的受試者資訊區可能含姓名、出生日期、備註等，轉檔程式一律不解碼、不顯示、不寫出。
 - 年齡欄位（舊版程式誤稱為 version）同樣不寫入任何輸出。
@@ -174,17 +147,19 @@ Pipeline 在設計上即注重隱私：階段 1 轉檔時，輸出 EDF 的受試
 
 ---
 
-## 程式撰寫與去識別化
+## 程式來源、去識別化與 AI 協助
 
-本倉庫的程式碼由作者撰寫。研究室內部的腳本可能含有受試者編號、受試者層級的檔名、本機路徑與資料庫連結，依研究倫理審查的規定均不得公開。這類資訊以人工檢查容易遺漏，因此釋出前交由 **Claude（Anthropic）** 審查並移除：編號與路徑改由不隨倉庫發布的本機設定檔讀取，或以範例值取代；可重用的元件自研究專屬流程中抽出並通用化（階段 01–03 的首次釋出使用 Claude Opus 4.8；`04_manuscript_sleepmed_r1/` 使用 Claude Opus 5.5）。去識別化後的程式碼經作者確認後上傳，並依 BSD 3-Clause License 以「現狀（as is）」提供，不附任何明示或默示之擔保（見 `LICENSE`）。
+研究流程由作者開發。公開前使用 Claude（Anthropic）拆出可重用的程式，並移除受試者編號、個別檔名及本機路徑。第 01–03 階段使用 Claude Opus 4.8，`04_manuscript_sleepmed_r1/` 使用 Claude Opus 5.5。編號和路徑由本機設定檔讀取，或以範例值替代。作者在首次發布前核對了去識別化後的程式。
+
+Codex（OpenAI）協助整理公開版的 Python 主成分分析與分群程式。整理後重跑腳本，並與上一版比對數值輸出。
 
 ---
 
 ## 引用（Citation）
 
-發布的程式碼支援腦電圖轉換、預處理、功率譜密度提取和特徵生成工作流程的可複現性。重複使用或修改程式碼時，請引用相關論文和此程式碼庫。
+重複使用或修改這套腦波轉檔、前處理與頻譜分析程式時，請引用相關論文及本程式庫。
 
-修訂稿使用的封存版本：v2.0.0，https://doi.org/10.5281/zenodo.24330571。
+修訂稿使用的封存版本：v2.0.1，https://doi.org/10.5281/zenodo.24413255。
 
 **建議的資料/程式碼可用性聲明（針對稿件）：**
 

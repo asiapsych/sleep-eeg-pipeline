@@ -12,11 +12,11 @@
 └── analysis/               # Python：ISI 題項的主成分分析與分群
 ```
 
-兩個資料夾內的註解與說明文字為繁體中文。
+MATLAB 程式的註解使用繁體中文，Python 程式的註解使用英文。
 
 ## `matlab_pipeline_v2.3/`：前處理
 
-全自動執行，所有參與者使用同一組固定門檻（`config/config_thresholds.m`）：帶通濾波、壞通道偵測與內插、CleanLine、以 PICARD 估計 ICA、依 ICLabel 移除成分、平均參考、切分 epoch 並剔除，最後輸出頻譜。
+自動執行，所有參與者使用同一組固定門檻（`config/config_thresholds.m`）：帶通濾波、壞通道偵測與內插、CleanLine、以 PICARD 估計 ICA、依 ICLabel 移除成分、平均參考、切分 epoch 並剔除，最後輸出頻譜。自動標記的成分與保留的 epoch 另由受過訓練的研究人員目視確認（`review_ica_smart.m`、`review_epochs_smart.m`）。
 
 | 檔案 | 用途 |
 |---|---|

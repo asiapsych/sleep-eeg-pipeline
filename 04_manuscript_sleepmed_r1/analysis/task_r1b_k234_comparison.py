@@ -1,35 +1,34 @@
-"""K-means 二至六群的內部效度指標與重抽樣穩定度。
+"""Internal validity indices and bootstrap stability of K-means with 2 to 6 clusters.
 
-分群只用 ISI 七題（ISI 總分 ≥ 9 者）。重抽樣 ARI 讀 task_e2 的輸出。"""
+Only the seven ISI items are clustered (ISI >= 9). The bootstrap ARIs come from task_e2."""
 
-from __future__ import annotations
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
+from sklearn.metrics import (
+    calinski_harabasz_score,
+    davies_bouldin_score,
+    silhouette_score,
+)
 
-from _r1_common import AN, ISI_ITEMS, SEED, load_all
+from _r1_common import AN, ISI_ITEMS, SEED, load_all, prepare_isi_items
 
 OUT = AN / "S_R1b_k234"
 OUT.mkdir(parents=True, exist_ok=True)
-MD = []
+summary_lines = []
 
 
-def P(*a):
-    s = " ".join(str(x) for x in a)
-    print(s)
-    MD.append(s)
+def report(line):
+    print(line)
+    summary_lines.append(line)
 
 
 df = load_all()
 ins = df[df["group"] != "HC"]
-P("# S_R1b — K-means 二至六群\n")
-P(f"失眠症狀者 n = {len(ins)}\n")
+report("# K-means, 2 to 6 clusters\n")
+report(f"participants with insomnia symptoms: n = {len(ins)}\n")
 
-# 1. 內部效度指標
-X = StandardScaler().fit_transform(SimpleImputer(strategy="median").fit_transform(ins[ISI_ITEMS]))
+_, X = prepare_isi_items(ins[ISI_ITEMS])
 ari = pd.read_csv(AN / "S16_bootstrap_stability" / "05_selectK_bootstrap_ARI.csv").set_index("K")
 rows = []
 for k in range(2, 7):
@@ -48,7 +47,7 @@ for k in range(2, 7):
     )
 val = pd.DataFrame(rows)
 val.to_csv(OUT / "01_validity_indices.csv", index=False, encoding="utf-8-sig")
-P("## 1. 內部效度指標與 bootstrap 穩定度（silhouette、CH 越大越好；DB 越小越好）\n")
-P(val.to_markdown(index=False))
-P("")
-(OUT / "07_summary.md").write_text("\n".join(MD), encoding="utf-8")
+report("## Internal validity and bootstrap stability\n")
+report(val.to_markdown(index=False))
+report("")
+(OUT / "02_summary.md").write_text("\n".join(summary_lines), encoding="utf-8")

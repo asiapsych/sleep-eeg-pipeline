@@ -1,46 +1,16 @@
-# Resting-State EEG Processing Pipeline (NeuroGuide → Features)
+# Resting EEG processing and analysis
 
 **English** | [中文](README.zh-TW.md)
 
-A reproducible pipeline that takes raw NeuroGuide EEG recordings all the way to
-analysis-ready **traditional band power** and **periodic / aperiodic (FOOOF)**
-feature tables.
-
-This repository contains **code only** — no participant data. Stages 1–3 are the
-general, reusable pipeline. The study-specific code for the *Sleep Medicine*
-manuscript (the preprocessing as run, and the principal component analysis and
-clustering of the ISI items) is in
+Stages 1–3 convert NeuroGuide EEG recordings to EDF, preprocess the recordings
+and extract spectral features. The repository contains code only. The *Sleep
+Medicine* manuscript's preprocessing, principal component analysis and
+clustering of the ISI items are in
 [`04_manuscript_sleepmed_r1/`](04_manuscript_sleepmed_r1/README.md).
 
 ---
 
-## Pipeline overview
-
-A three-stage linear workflow, run in order:
-
-```
-  Raw .ng (NeuroGuide)
-        │
-        ▼
-┌─────────────────────────┐
-│ 01_ng2edf  (Python)     │   Reverse-engineered NeuroGuide reader → standard EDF
-└─────────────────────────┘
-        │  *.edf
-        ▼
-┌─────────────────────────┐
-│ 02_preprocess_eeglab    │   filter → bad-channel detect/interp → CleanLine →
-│   (MATLAB + EEGLAB)     │   ICA (ICLabel) → avg ref → epoch → reject → PSD export
-└─────────────────────────┘
-        │  psd_<ID>.mat
-        ▼
-┌─────────────────────────┐
-│ 03_features  (Python)   │   Traditional band power (absolute / relative / ratios)
-│                         │   + FOOOF aperiodic exponent/offset + periodic peaks
-└─────────────────────────┘
-        │
-        ▼
-   Feature tables (CSV)  ──►  PCA and clustering for the manuscript: 04_manuscript_sleepmed_r1/
-```
+## Processing stages
 
 | Stage | Language | Input | Output |
 |-------|----------|-------|--------|
@@ -62,12 +32,12 @@ See each stage's `README.md` for full detail.
 ├── requirements.txt          # pinned Python dependencies
 ├── .gitignore                # excludes all data + caches
 ├── CHANGELOG.md
-├── 01_ng2edf/                # Python — NeuroGuide .ng → EDF
+├── 01_ng2edf/                # Python, NeuroGuide .ng to EDF
 │   ├── ng2edf.py
 │   ├── NG_FORMAT.md              # byte-level description of the .ng format
 │   ├── tests/                    # unit tests on synthetic .ng files
 │   └── README.md
-├── 02_preprocess_eeglab/     # MATLAB — EDF → preprocessing → PSD (+ band power)
+├── 02_preprocess_eeglab/     # MATLAB, preprocessing and PSD export
 │   ├── run_pipeline_auto.m       # fully automated entry
 │   ├── run_pipeline_manual.m     # human-in-the-loop entry (used for the manuscript)
 │   ├── master_pipeline.m         # orchestrator (step1 … step5)
@@ -77,7 +47,7 @@ See each stage's `README.md` for full detail.
 │   ├── helpers/                  # shared functions (bad-channel, rank, RNG, QC …)
 │   ├── chan_locs/                # bundled 10-20 channel-location file
 │   └── README.md
-├── 03_features/              # Python — PSD → traditional power + FOOOF
+├── 03_features/              # Python, band power and FOOOF from PSD
 │   ├── compute_features.py
 │   └── README.md
 └── 04_manuscript_sleepmed_r1/   # study-specific code for the Sleep Medicine manuscript
@@ -112,7 +82,7 @@ pip install -r requirements.txt
 ## Quick start
 
 ```bash
-# 1) NeuroGuide → EDF   (add --events for a per-file table of recording splices)
+# 1) Convert NeuroGuide files to EDF   (add --events for a per-file table of recording splices)
 python 01_ng2edf/ng2edf.py --input /path/to/raw_ng --output /path/to/raw_edf
 ```
 
@@ -130,7 +100,7 @@ run_pipeline_manual('/path/to/raw_edf')   % human-confirmed (manuscript mode)
 ```
 
 ```bash
-# 3) PSD → features
+# 3) Extract features from PSD files
 python 03_features/compute_features.py \
     --psd-dir /path/to/outputs/psd_mat --out-dir /path/to/features
 ```
@@ -156,13 +126,12 @@ decisions are made:
 
 ## Design principles
 
-- **Reproducible** — fixed random seeds; a deterministic per-subject seed
-  (hash of subject ID + global seed); a version stamp (git hash + tool versions);
-  full per-subject JSON manifests and per-step CSV logs.
-- **Single source of truth for power** — traditional band power and FOOOF are
-  both computed in stage 3 from the *same* PSD with the *same* band definition,
-  so band edges never disagree between scripts.
-- **Methods export** — `master_methods_export` (stage 2) auto-generates a
+- Each run uses fixed seeds, records the Git revision and tool versions, and
+  writes JSON manifests and CSV logs. The seed for each recording is derived
+  from its subject ID and the global seed.
+- Stage 3 computes traditional band power and FOOOF from the same PSD using the
+  same band definitions.
+- `master_methods_export` (stage 2) auto-generates a
   COBIDAS-style Methods paragraph draft from the actual settings.
 
 ### Frequency bands (literature standard)
@@ -184,9 +153,8 @@ mappings, or study-specific subject codes are included in this repository.
 Access to participant-level data is restricted by institutional ethics approval,
 participant consent, and privacy regulations.
 
-The pipeline is privacy-aware by construction: stage 1 writes a **de-identified
-case code** (derived from the input folder name) into the EDF patient field and
-never propagates any identifier that may be stored in the NeuroGuide header
+Stage 1 writes a de-identified case code from the input folder name into the EDF
+patient field. It does not copy identifiers from the NeuroGuide header
 (see [`01_ng2edf/NG_FORMAT.md`](01_ng2edf/NG_FORMAT.md#13-privacy)).
 
 ---
@@ -203,20 +171,19 @@ pipeline.
 
 ---
 
-## Authorship and de-identification
+## Authorship, de-identification and AI assistance
 
-All code in this repository was written by the authors. The laboratory's
-internal scripts can contain participant identifiers, participant-level file
-names, local paths and database couplings, none of which may be shared under the
-ethics approval. Because such details are easy to miss in a manual check, the
-code was reviewed with **Claude (Anthropic)** before release to locate and remove
-them: identifiers and paths are read from local configuration files that are not
-distributed, or were replaced with placeholders, and the reusable components were
-separated from the study-specific pipeline and generalized (Claude Opus 4.8 for
-the initial release of stages 01–03; Claude Opus 5.5 for
-`04_manuscript_sleepmed_r1/`). The authors checked the de-identified code before
-upload. The released code is provided "as is", without warranty of any kind,
-under the BSD 3-Clause License (see `LICENSE`).
+The authors developed the research pipeline. Claude (Anthropic) assisted with
+separating reusable code from the internal scripts and removing participant
+identifiers, participant-level filenames and local paths before release.
+Claude Opus 4.8 assisted with stages 01–03, and Claude Opus 5.5 assisted with
+`04_manuscript_sleepmed_r1/`. Identifiers and paths are read from private local
+settings or replaced with examples. The authors reviewed the de-identified code
+before its initial release.
+
+Codex (OpenAI) assisted with refactoring the Python PCA and clustering scripts.
+We reran the scripts and compared their numerical outputs with the previous
+version.
 
 ---
 
@@ -226,8 +193,8 @@ The released code supports reproducibility of the EEG conversion, preprocessing,
 PSD extraction, and feature-generation workflow. Please cite the associated
 manuscript and this repository when reusing or adapting the code.
 
-Archived version used for the revised manuscript: v2.0.0,
-https://doi.org/10.5281/zenodo.24330571.
+Archived version used for the revised manuscript: v2.0.1,
+https://doi.org/10.5281/zenodo.24413255.
 
 **Suggested Data/Code Availability statement (for the manuscript):**
 

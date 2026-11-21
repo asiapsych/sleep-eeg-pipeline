@@ -2,6 +2,18 @@
 
 All notable changes to this repository are listed here.
 
+## [2.0.1] - 2026-11-21
+
+### Changed
+- `04_manuscript_sleepmed_r1/analysis/`: code tidied, with comments, docstrings and
+  printed headings in English. Outputs are written to `outputs/analysis/`. The
+  numerical results are unchanged.
+- `04_manuscript_sleepmed_r1/README.md`: the preprocessing description now notes
+  the visual check of flagged components and retained epochs, as in the manuscript.
+- README (EN, zh-TW): shortened; the authorship section notes help from Codex
+  with the Python refactoring.
+- `.gitignore`: ignores `04_manuscript_sleepmed_r1/analysis/local_settings.json`.
+
 ## [2.0.0] - 2026-11-18
 
 ### Added

@@ -1,29 +1,23 @@
-"""K-means 二至六群的 predict-back bootstrap 穩定度。
+"""Predict-back bootstrap stability of K-means with 2 to 6 clusters.
 
-每次以重抽樣本擬合，再預測回原樣本，計算與參考解的 ARI；每個 K 重設同一個 RNG。"""
+Each resample is clustered, the fit is used to assign the original sample, and the
+assignment is compared with the reference solution (ARI). The RNG is reset for each K."""
 
-from __future__ import annotations
-
-from pathlib import Path
 import sqlite3
 import warnings
+from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
-from sklearn.impute import SimpleImputer
 from sklearn.metrics import adjusted_rand_score
-from sklearn.preprocessing import StandardScaler
 
-from _dynamic_n import DB_PATH as _DB
+from _dynamic_n import DB_PATH, ISI_ITEMS, S17_RELPOWER_CSV, SEED, excluded_ids
+from _r1_common import prepare_isi_items
 
-DB_PATH = Path(_DB)
-SEED = 42
-ISI_ITEMS = [f"ISI_T1_Q{i}" for i in range(1, 8)]
-
-OUT_DIR = Path(__file__).parent / "outputs" / "補充資料" / "analysis" / "S16_bootstrap_stability"
+OUT_DIR = Path(__file__).parent / "outputs" / "analysis" / "S16_bootstrap_stability"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 K_RANGE = list(range(2, 7))
@@ -31,7 +25,7 @@ N_BOOT = 1000
 
 
 def load_clustering_sample():
-    """分群樣本：具可用 EEG、未排除、ISI ≥ 9 且七題完整。"""
+    """Clustering sample: usable EEG, not excluded, ISI >= 9 and all seven items answered."""
     quoted = ", ".join(f'"{c}"' for c in ["NEW_NUMBER", "ISI_T1"] + ISI_ITEMS)
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql(
@@ -42,22 +36,10 @@ def load_clustering_sample():
     for c in df.columns:
         if c != "NEW_NUMBER":
             df[c] = pd.to_numeric(df[c], errors="coerce")
-    # bootstrap 只用 EEG 有效樣本，和主分析的納入條件一致。
-    from pathlib import Path as _P
-
-    relp_csv = (
-        _P(__file__).parent
-        / "outputs"
-        / "補充資料"
-        / "analysis"
-        / "S17_relative_power"
-        / "01_relpower_subject.csv"
-    )
-    if relp_csv.exists():
-        valid_sids = set(pd.read_csv(relp_csv)["subject"].drop_duplicates().tolist())
-        from _dynamic_n import excluded_ids
-
-        df = df[df["NEW_NUMBER"].isin(valid_sids) & ~df["NEW_NUMBER"].isin(excluded_ids())].copy()
+    # Keep the database row order so the same seed draws the same participants.
+    if S17_RELPOWER_CSV.exists():
+        eeg_subjects = pd.read_csv(S17_RELPOWER_CSV)["subject"]
+        df = df[df["NEW_NUMBER"].isin(eeg_subjects) & ~df["NEW_NUMBER"].isin(excluded_ids())].copy()
     df_ins = df[df["ISI_T1"] >= 9].dropna(subset=ISI_ITEMS).copy()
     return df_ins
 
@@ -65,23 +47,20 @@ def load_clustering_sample():
 def main():
     df_ins = load_clustering_sample()
     n = len(df_ins)
-    print(f"分群樣本 n = {n}")
+    print(f"clustering sample: n = {n}")
 
-    imp = SimpleImputer(strategy="median")
-    scl = StandardScaler()
-    X = scl.fit_transform(imp.fit_transform(df_ins[ISI_ITEMS].values))
+    _, X = prepare_isi_items(df_ins[ISI_ITEMS].values)
     n_idx = np.arange(n)
 
     rows = []
     for k in K_RANGE:
-        # 參考解（n_init=100, seed=42）
         km_ref = KMeans(n_clusters=k, random_state=SEED, n_init=100)
         lab_ref = km_ref.fit_predict(X)
 
-        # 每個 K 各自重設 RNG，每輪只抽一次樣本。
+        # same draws for every K
         rng = np.random.default_rng(SEED)
         aris = []
-        for b in range(N_BOOT):
+        for _ in range(N_BOOT):
             boot_idx = rng.choice(n_idx, size=n, replace=True)
             Xb = X[boot_idx]
             if len(np.unique(Xb, axis=0)) <= k:
@@ -106,8 +85,9 @@ def main():
         print(f"  K={k}: ARI median={med:.4f}  95% [{lo:.4f}, {hi:.4f}]  (n={len(aris)})")
 
     out = pd.DataFrame(rows)
-    out.to_csv(OUT_DIR / "05_selectK_bootstrap_ARI.csv", index=False)
-    print(f"\n✓ 寫入 {OUT_DIR / '05_selectK_bootstrap_ARI.csv'}")
+    output_csv = OUT_DIR / "05_selectK_bootstrap_ARI.csv"
+    out.to_csv(output_csv, index=False)
+    print(f"\nwrote {output_csv}")
 
 
 if __name__ == "__main__":

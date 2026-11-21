@@ -1,51 +1,50 @@
-"""R1 共用的樣本、分群與效果量。
-
-從 S10、S17 接上量表。K-means 前先固定 subject 列序，再做 median imputation
-與標準化；這個順序要和原分析一致，否則標籤與 bootstrap 不一定能重現。"""
+"""Merge the EEG and ISI data and split participants with insomnia symptoms into two severity groups."""
 
 from __future__ import annotations
-from pathlib import Path
+
+import sqlite3
 import warnings
+from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
-import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
-import sqlite3
-
-from _dynamic_n import DB_PATH, ISI_ITEMS, SAMPLE, get_labels
+from _dynamic_n import DB_PATH, ISI_ITEMS, SAMPLE, SEED, get_labels
 
 BASE = Path(__file__).resolve().parent
-AN = BASE / "outputs" / "補充資料" / "analysis"
+AN = BASE / "outputs" / "analysis"
 F_S10 = AN / "S10_fooof_full" / "03_subject_brain_avg.csv"
 F_S10_CH = AN / "S10_fooof_full" / "01_specparam_features.csv"
 F_S17 = AN / "S17_relative_power" / "01_relpower_subject.csv"
 
-OUTCOME = "beta_pw_BRAIN"  # 主要指標：SpecParam periodic beta peak power（全頭皮平均）
-SEED = 42
-COV = "AGE + C(SEX) + EDU"
-COV_COLS = ["AGE", "SEX", "EDU"]
+OUTCOME = "beta_pw_BRAIN"  # primary outcome: periodic beta peak power (SpecParam), whole-scalp mean
 MIDLINE = ["FZ", "CZ", "PZ"]
-# 各樣本定義下預期的人數（防呆：資料或排除名單被動到時會報錯）
+# expected sizes, to catch a wrong exclusion list
 EXPECTED = {
     "submitted": dict(N=275, K2=[104, 61]),
     "audited": dict(N=271, K2=[102, 60]),
 }
 
 
-CLUSTER_INPUTS: dict = {}  # load_all() 最近一次計算的分群輸入：{sample: {'X_ins': 標準化後的七題矩陣, 'km': {K: 標籤}}}
+CLUSTER_INPUTS: dict = {}
+
+
+def prepare_isi_items(items):
+    """Median-impute the ISI items. Returns the filled scores and their z scores."""
+    filled = SimpleImputer(strategy="median").fit_transform(items)
+    return filled, StandardScaler().fit_transform(filled)
 
 
 def load_data(sample: str | None = None) -> pd.DataFrame:
-    """EEG∩ISI 樣本（人數依 sample 而定，見 EXPECTED）：subject、組別（HC／INS）、ISI、人口學、量表、periodic beta。"""
+    """Joint EEG and ISI sample with group (HC/INS), ISI, demographics, questionnaires and periodic beta."""
     df = get_labels(sample).merge(
         pd.read_csv(F_S10)[["subject", OUTCOME]], on="subject", how="left"
     )
-    # PSQI 總分只作表 1 的描述，不進任何模型（2026-11-16 加）
+    # PSQI total is only used to describe the sample.
     with sqlite3.connect(DB_PATH) as con:
         psqi = pd.read_sql(
             "SELECT NEW_NUMBER AS subject, PSQI_T1 FROM isi_raw_data WHERE NEW_NUMBER IS NOT NULL",
@@ -58,7 +57,7 @@ def load_data(sample: str | None = None) -> pd.DataFrame:
 
 
 def load_all(sample: str | None = None) -> pd.DataFrame:
-    """依 subject 升冪（人數依 sample 而定）；含 K = 2 分群標籤（Lower／Higher）與所有 EEG 指標。"""
+    """Sorted by subject, with the K = 2 labels (Lower/Higher) and all EEG measures."""
     sample = sample or SAMPLE
     exp = EXPECTED[sample]
     df = load_data(sample).copy()
@@ -82,26 +81,20 @@ def load_all(sample: str | None = None) -> pd.DataFrame:
         .sort_values("subject", kind="mergesort")
         .reset_index(drop=True)
     )
-    assert df["subject"].is_unique and (exp["N"] is None or len(df) == exp["N"]), f"N = {len(df)}"
+    assert df["subject"].is_unique and len(df) == exp["N"], f"N = {len(df)}"
 
     ins_mask = df["group"] != "HC"
     ins = df.loc[ins_mask]
-    X = StandardScaler().fit_transform(
-        SimpleImputer(strategy="median").fit_transform(ins[ISI_ITEMS])
-    )
-    km = {2: KMeans(n_clusters=2, random_state=SEED, n_init=100).fit_predict(X)}
-
-    for k in (2,):
-        raw = pd.Series(km[k], index=ins.index)
-        order = (
-            ins.groupby(raw)["ISI_T1"].mean().sort_values().index.tolist()
-        )  # 依 ISI 總分由低到高編號
-        name = {c: f"K{k}_C{i + 1}" for i, c in enumerate(order)}
-        df[f"k{k}"] = "HC"
-        df.loc[ins_mask, f"k{k}"] = raw.map(name).values
+    # K-means initialisation depends on row order; keep the original subject order.
+    _, items = prepare_isi_items(ins[ISI_ITEMS])
+    labels = KMeans(n_clusters=2, random_state=SEED, n_init=100).fit_predict(items)
+    raw = pd.Series(labels, index=ins.index)
+    order = ins.groupby(raw)["ISI_T1"].mean().sort_values().index
+    names = dict(zip(order, ("Lower", "Higher")))
+    df["k2"] = "HC"
+    df.loc[ins_mask, "k2"] = raw.map(names).values
     k2n = sorted(df.loc[ins_mask, "k2"].value_counts().tolist(), reverse=True)
-    assert exp["K2"] is None or k2n == exp["K2"], k2n
-    df["k2"] = df["k2"].replace({"K2_C1": "Lower", "K2_C2": "Higher"})  # K=2：低分群／高分群
-    # 分群用的矩陣與標籤不掛在 df.attrs（attrs 內有陣列時，pandas 在合併兩個衍生資料表時會比較失敗）
-    CLUSTER_INPUTS[sample] = dict(X_ins=X, km=km)
+    assert k2n == exp["K2"], k2n
+    # not in df.attrs: arrays there break attrs comparison when pandas merges tables
+    CLUSTER_INPUTS[sample] = {"X_ins": items, "km": {2: labels}}
     return df

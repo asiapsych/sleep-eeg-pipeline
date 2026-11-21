@@ -20,14 +20,17 @@ access to the data, but each step can be read here.
 └── analysis/               # Python: principal component analysis and clustering of the ISI items
 ```
 
-Comments and docstrings in these two folders are in Traditional Chinese.
+The MATLAB code is annotated in Traditional Chinese; the Python comments are in
+English.
 
 ## `matlab_pipeline_v2.3/` — preprocessing
 
-Fully automated, with one set of fixed thresholds for all participants
+Automated, with one set of fixed thresholds for all participants
 (`config/config_thresholds.m`): band-pass filter, bad-channel detection and
 interpolation, CleanLine, ICA with PICARD, ICLabel-based component removal,
-average reference, epoching and epoch rejection, then spectral export.
+average reference, epoching and epoch rejection, then spectral export. A trained
+researcher also visually checked the flagged components and the retained epochs
+(`review_ica_smart.m`, `review_epochs_smart.m`).
 
 | File | Purpose |
 |---|---|
